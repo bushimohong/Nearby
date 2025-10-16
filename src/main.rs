@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 use dioxus_desktop::{Config, WindowBuilder};
 use dioxus_component::App;
+
 mod dioxus_component;
 mod core;
 
