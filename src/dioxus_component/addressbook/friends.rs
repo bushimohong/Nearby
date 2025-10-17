@@ -3,7 +3,7 @@ use dioxus::prelude::*;
 use crate::core::db::AddressBook;
 
 #[component]
-pub fn FriendsList() -> Element {
+pub fn FriendsList(refresh_trigger: u32) -> Element {
 	let friends = use_signal(|| Vec::new());
 	let mut search_query = use_signal(|| String::new());
 	let mut error_message = use_signal(|| None::<String>);
@@ -47,9 +47,9 @@ pub fn FriendsList() -> Element {
 	};
 	
 	// 加载好友列表
-	use_effect(move || {
+	use_effect(use_reactive((&refresh_trigger,), move |_| {
 		load_friends(None);
-	});
+	}));
 	
 	// 处理搜索
 	let handle_search = move |_| {

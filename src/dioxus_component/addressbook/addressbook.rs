@@ -7,6 +7,12 @@ use super::whitelist::Whitelist;
 pub fn AddressBookPage() -> Element {
     let mut active_tab = use_signal(|| "friends");
     let mut show_add_modal = use_signal(|| false);
+    let mut refresh_trigger = use_signal(|| 0); // 添加刷新触发器
+    
+    // 刷新列表的函数
+    let mut refresh_list = move || {
+        refresh_trigger += 1;
+    };
     
     rsx! {
         div {
@@ -17,10 +23,9 @@ pub fn AddressBookPage() -> Element {
                 flex-direction: row;
                 align-items: center;
                 justify-content: flex-start;
-                overflow: hidden; /* 防止整个页面滚动 */
+                overflow: hidden;
             ",
             
-            // 左侧选择栏，选择好友，白名单 ｜ 添加人员按钮（新建add_member.rs）
             // 左侧边栏
             div {
                 style: "
@@ -104,7 +109,6 @@ pub fn AddressBookPage() -> Element {
             },
             
             // 右侧区域
-            // 展示信息列表 - 可滚动区域
             div {
                 style: "
                     flex: 1;
@@ -125,8 +129,16 @@ pub fn AddressBookPage() -> Element {
                         min-height: 400px;
                     ",
                     match *active_tab.read() {
-                        "friends" => rsx! { FriendsList {} },
-                        "whitelist" => rsx! { Whitelist {} },
+                        "friends" => rsx! {
+                            FriendsList {
+                                refresh_trigger: *refresh_trigger.read()
+                            }
+                        },
+                        "whitelist" => rsx! {
+                            Whitelist {
+                                refresh_trigger: *refresh_trigger.read()
+                            }
+                        },
                         _ => rsx! { div { "未知标签" } }
                     }
                 }
@@ -137,6 +149,7 @@ pub fn AddressBookPage() -> Element {
                 AddModal {
                     on_close: move |_| show_add_modal.set(false),
                     active_tab: *active_tab.read(),
+                    on_success: move |_| refresh_list(),
                 }
             }
         }

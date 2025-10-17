@@ -3,7 +3,7 @@ use dioxus::prelude::*;
 use crate::core::db::AddressBook;
 
 #[component]
-pub fn AddModal(on_close: EventHandler, active_tab: &'static str) -> Element {
+pub fn AddModal(on_close: EventHandler, active_tab: &'static str, on_success: EventHandler) -> Element {
 	let mut current_step = use_signal(|| if active_tab == "friends" { "friend" } else { "identity" });
 	let mut address = use_signal(|| String::new());
 	let mut alias = use_signal(|| String::new());
@@ -28,6 +28,7 @@ pub fn AddModal(on_close: EventHandler, active_tab: &'static str) -> Element {
 		let mut error_message = error_message.to_owned();
 		let mut success_message = success_message.to_owned();
 		let on_close = on_close.to_owned();
+		let on_success = on_success.to_owned();
 		
 		spawn(async move {
 			match tokio::task::spawn_blocking(move || {
@@ -36,6 +37,7 @@ pub fn AddModal(on_close: EventHandler, active_tab: &'static str) -> Element {
 				Ok(Ok(())) => {
 					success_message.set("好友添加成功".to_string());
 					error_message.set(String::new());
+					on_success.call(());
 					on_close.call(());
 				}
 				Ok(Err(e)) => {
@@ -72,6 +74,7 @@ pub fn AddModal(on_close: EventHandler, active_tab: &'static str) -> Element {
 		let mut error_message = error_message.to_owned();
 		let mut success_message = success_message.to_owned();
 		let on_close = on_close.to_owned();
+		let on_success = on_success.to_owned();
 		
 		spawn(async move {
 			match tokio::task::spawn_blocking(move || {
@@ -80,6 +83,7 @@ pub fn AddModal(on_close: EventHandler, active_tab: &'static str) -> Element {
 				Ok(Ok(())) => {
 					success_message.set("身份标识添加成功".to_string());
 					error_message.set(String::new());
+					on_success.call(());
 					on_close.call(());
 				}
 				Ok(Err(e)) => {

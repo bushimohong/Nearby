@@ -230,13 +230,31 @@ fn IdentitySection(
                         border-radius: 6px;
                         cursor: pointer;
                         font-size: 14px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        gap: 8px;
                     ",
                     onclick: move |_| on_copy.call(()),
                     
                     if copy_success() {
-                        "✓ 已复制"
+                        div {
+                            img {
+                                style: "width: 16px; height: 16px; position: relative; left: -2px; top: 2px;",
+                                src: asset!("assets/success-100.png"),
+                                alt: "  成功"
+                            }
+                            span { "  已复制" }
+                        }
                     } else {
-                        "复制身份码"
+                        div {
+                            img {
+                                style: "width: 16px; height: 16px;",
+                                src: asset!("assets/copy-100.png"),
+                                alt: "  复制"
+                            }
+                            span { "  复制身份码" }
+                        }
                     }
                 }
                 
@@ -251,13 +269,31 @@ fn IdentitySection(
                         border-radius: 6px;
                         cursor: pointer;
                         font-size: 14px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        gap: 8px;
                     ",
                     onclick: move |_| on_reset.call(()),
                     
                     if reset_success() {
-                        "✓ 已重置"
+                        div {
+                            img {
+                                style: "width: 16px; height: 16px; position: relative; left: -2px; top: 2px;",
+                                src: asset!("assets/success-100.png"),
+                                alt: "  成功"
+                            }
+                            span { "  已重置" }
+                        }
                     } else {
-                        "重置身份码"
+                        div {
+                            img {
+                                style: "width: 16px; height: 16px;",
+                                src: asset!("assets/reset-100.png"),
+                                alt: "  重置"
+                            }
+                            span { "  重置身份码" }
+                        }
                     }
                 }
             }
