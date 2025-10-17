@@ -14,6 +14,8 @@ pub fn App() -> Element {
 	let current_page = use_signal(|| Page::Receive);
 	
 	rsx! {
+        style { {include_str!("../../assets/main.css")} }
+        
         div {
             style: "
                 height: 100vh;
@@ -118,6 +120,8 @@ pub fn NavItem(
             
             // 图标容器，添加底部指示器
             div {
+                class: "nav-item",
+                
                 style: "
                     display: flex;
                     flex-direction: column;
@@ -128,7 +132,6 @@ pub fn NavItem(
                 img {
                     style: "width: 30px; height: 30px;",
                     src: "{icon_src}",
-                    class: "button-icon",
                 }
                 
                 // 选中状态指示器 - 小圆角矩形（在图标下方）

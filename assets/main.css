@@ -1,45 +1,61 @@
-/* App-wide styling */
-body {
-    background-color: #0f1116;
-    color: #ffffff;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    margin: 20px;
-}
-
-#hero {
-    margin: 0;
+/* 图标按钮基础样式 */
+.icon-button {
+    width: 48px;
+    height: 48px;
+    border: none;
+    border-radius: 50%;
     display: flex;
-    flex-direction: column;
-    justify-content: center;
     align-items: center;
-}
-
-#links {
-    width: 400px;
-    text-align: left;
-    font-size: x-large;
-    color: white;
-    display: flex;
-    flex-direction: column;
-}
-
-#links a {
-    color: white;
-    text-decoration: none;
-    margin-top: 20px;
-    margin: 10px 0px;
-    border: white 1px solid;
-    border-radius: 5px;
-    padding: 10px;
-}
-
-#links a:hover {
-    background-color: #1f1f1f;
+    justify-content: center;
     cursor: pointer;
+    font-size: 16px;
+    transition: all 0.2s ease;
+    background-color: transparent;
 }
 
-#header {
-    max-width: 1200px;
+/* 悬停状态 */
+.icon-button:hover {
+    background-color: #f0f0f0;
+}
+
+/* 按钮图标样式 */
+.button-icon {
+    width: 28px;
+    height: 28px;
+}
+
+/* 悬停状态 */
+.button-icon:hover {
+    background-color: #f0f0f0;
+}
+
+/* 按钮图标样式 */
+.small_button-icon {
+    width: 16px;
+    height: 16px;
+}
+
+/* 悬停状态 */
+.small_icon-button:hover {
+    background-color: #f0f0f0;
+}
+
+.nav-item {
+    transition: all 0.2s ease;
+    border-radius: 8px; /* 可选：添加圆角 */
+    padding: 8px; /* 可选：增加内边距 */
+}
+
+.nav-item:hover {
+    background-color: #f0f0f0; /* 浅灰色背景 */
+}
+
+.nav-item:hover img {
+    opacity: 0.8;
+}
+
+.nav-item:hover .indicator {
+    opacity: 0.8;
 }
 
 

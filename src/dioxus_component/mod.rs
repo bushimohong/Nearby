@@ -1,5 +1,5 @@
 mod send;
-mod receivefile;
+mod receive;
 mod addressbook;
 mod settings;
 mod app;
@@ -7,7 +7,7 @@ mod app;
 
 // 导出页面组件
 pub use send::send::Send;
-pub use receivefile::receivefile::Receive;
+pub use receive::receive::Receive;
 pub use addressbook::addressbook::AddressBookPage;
 pub use settings::settings::Settings;
 

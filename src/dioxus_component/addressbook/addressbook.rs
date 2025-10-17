@@ -136,7 +136,7 @@ pub fn AddressBookPage() -> Element {
             if *show_add_modal.read() {
                 AddModal {
                     on_close: move |_| show_add_modal.set(false),
-                    active_tab: *active_tab.read()
+                    active_tab: *active_tab.read(),
                 }
             }
         }

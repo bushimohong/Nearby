@@ -7,6 +7,7 @@ pub fn Settings() -> Element {
     let error_message = use_signal(|| String::new());
     let success_message = use_signal(|| String::new());
     let copy_success = use_signal(|| false);
+    let reset_success = use_signal(|| false);
     
     // 加载我的身份码
     use_effect(move || {
@@ -36,9 +37,9 @@ pub fn Settings() -> Element {
                         if clipboard.write_text(&identity).await.is_ok() {
                             copy_success.set(true);
                             
-                            // 3秒后重置复制成功状态
+                            // 2秒后重置复制成功状态
                             spawn(async move {
-                                tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+                                tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
                                 copy_success.set(false);
                             });
                         }
@@ -70,6 +71,7 @@ pub fn Settings() -> Element {
         let mut my_identity = my_identity.to_owned();
         let mut error_message = error_message.to_owned();
         let mut success_message = success_message.to_owned();
+        let mut reset_success = reset_success.to_owned();
         
         spawn(async move {
             match tokio::task::spawn_blocking(|| AddressBook::reset_my_identity()).await {
@@ -77,6 +79,13 @@ pub fn Settings() -> Element {
                     success_message.set("身份码重置成功".to_string());
                     error_message.set(String::new());
                     my_identity.set(new_identity);
+                    
+                    reset_success.set(true);
+                    
+                    spawn(async move {
+                        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                        reset_success.set(false);
+                    });
                 }
                 Ok(Err(e)) => {
                     error_message.set(format!("重置失败: {}", e));
@@ -124,6 +133,7 @@ pub fn Settings() -> Element {
                     error_message,
                     success_message,
                     copy_success,
+                    reset_success,
                     on_copy: copy_identity,
                     on_reset: reset_identity,
                 }
@@ -139,6 +149,7 @@ fn IdentitySection(
     error_message: Signal<String>,
     success_message: Signal<String>,
     copy_success: Signal<bool>,
+    reset_success: Signal<bool>,
     on_copy: EventHandler,
     on_reset: EventHandler,
 ) -> Element {
@@ -242,38 +253,12 @@ fn IdentitySection(
                         font-size: 14px;
                     ",
                     onclick: move |_| on_reset.call(()),
-                    "重置身份码"
-                }
-            }
-            
-            // 错误和成功消息
-            if !error_message().is_empty() {
-                div {
-                    style: "
-                        color: #e74c3c;
-                        margin-top: 10px;
-                        font-size: 14px;
-                        padding: 8px;
-                        background-color: #ffeaea;
-                        border-radius: 4px;
-                        border: 1px solid #f5c6cb;
-                    ",
-                    "{error_message}"
-                }
-            }
-            
-            if !success_message().is_empty() {
-                div {
-                    style: "
-                        color: #27ae60;
-                        margin-top: 10px;
-                        font-size: 14px;
-                        padding: 8px;
-                        background-color: #e8f6f3;
-                        border-radius: 4px;
-                        border: 1px solid #c8e6c9;
-                    ",
-                    "{success_message}"
+                    
+                    if reset_success() {
+                        "✓ 已重置"
+                    } else {
+                        "重置身份码"
+                    }
                 }
             }
         }

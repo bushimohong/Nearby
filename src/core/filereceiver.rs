@@ -1,5 +1,5 @@
-// src/core/receive.rs
-use std::net::SocketAddrV6;
+// src/core/filereceiver.rs
+use std::net::{Ipv6Addr, SocketAddrV6};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -8,6 +8,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{Notify, Semaphore};
 use std::sync::Mutex;
+use pnet::datalink;
 
 pub struct FileReceiver;
 
@@ -26,6 +27,28 @@ pub enum ReceiveStatus {
 static RECEIVE_STATUS: Mutex<ReceiveStatus> = Mutex::new(ReceiveStatus::Closed);
 
 impl FileReceiver {
+    // 返回ipv6地址
+    pub fn get_ipv6_addr() -> Vec<Ipv6Addr> {
+        datalink::interfaces()
+            .iter()
+            .filter(|iface| iface.is_up() && !iface.is_loopback())
+            .flat_map(|iface| &iface.ips)
+            .filter_map(|ip_network| {
+                if let pnet::ipnetwork::IpNetwork::V6(ipv6_network) = ip_network {
+                    let ip = ipv6_network.ip();
+                    // 过滤掉链路本地地址和其他特殊地址
+                    if !is_special_ipv6_address(ip) {
+                        Some(ip)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+    
     // 设置接收状态
     pub fn set_receive_status(status: ReceiveStatus) -> Result<(), Box<dyn std::error::Error>> {
         let mut current_status = RECEIVE_STATUS.lock().unwrap();
@@ -286,4 +309,22 @@ impl FileReceiver {
         
         path
     }
+}
+
+/// 判断是否为特殊IPv6地址（链路本地、多播等）
+fn is_special_ipv6_address(ip: Ipv6Addr) -> bool {
+    let segments = ip.segments();
+    // 链路本地地址 (fe80::/10)
+    if segments[0] & 0xffc0 == 0xfe80 {
+        return true;
+    }
+    // 多播地址 (ff00::/8)
+    if segments[0] & 0xff00 == 0xff00 {
+        return true;
+    }
+    // 唯一本地地址 (fc00::/7)
+    if segments[0] & 0xfe00 == 0xfc00 {
+        return true;
+    }
+    false
 }

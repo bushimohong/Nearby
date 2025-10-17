@@ -1,4 +1,9 @@
 [application]
+name = "Nearby"
+asset_dir = "assets"
+
+[application.desktop]
+default_platform = "auto"
 
 [web.app]
 
