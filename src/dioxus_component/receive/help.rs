@@ -1,3 +1,5 @@
+// src/dioxus_component/receive/help.rs
+use log::{info, error};
 use dioxus::prelude::*;
 use crate::core::filereceiver::FileReceiver;
 use std::net::Ipv6Addr;
@@ -151,9 +153,9 @@ fn HelpWindow(show_help_window: Signal<bool>) -> Element {
                                                     // 复制功能实现
                                                     let mut clipboard = Clipboard::new().unwrap();
                                                     if let Err(e) = clipboard.set_text(addr_str.to_string().clone()) {
-                                                        eprintln!("复制失败: {}", e);
+                                                        error!("复制失败: {}", e);
                                                     } else {
-                                                        println!("已复制地址: {}", addr_str);
+                                                        info!("已复制地址: {}", addr_str);
                                                     }
                                                 },
                                                 img {

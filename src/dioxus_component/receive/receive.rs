@@ -1,17 +1,26 @@
+// src/dioxus_component/receive/receive.rs
 use dioxus::prelude::*;
 use crate::core::filereceiver::{FileReceiver, ReceiveStatus};
 use super::help::HelpButton;
+use super::history::HistoryWindow;
+use log::{info, error};
 
 #[component]
 pub fn Receive() -> Element {
     let mut status = use_signal(|| ReceiveStatus::Closed);
     let show_help_window = use_signal(|| false);
+    let mut show_history_window = use_signal(|| false);
     
     // 初始化状态
     use_effect(move || {
         let current_status = FileReceiver::get_receive_status();
         status.set(current_status);
     });
+    
+    // 关闭历史窗口的处理函数
+    let close_history = move |_| {
+        show_history_window.set(false);
+    };
     
     rsx! {
         div {
@@ -38,7 +47,7 @@ pub fn Receive() -> Element {
                 button {
                     class: "icon-button",
                     onclick: move |_| {
-                        println!("历史按钮被点击");
+                        show_history_window.set(true);
                     },
                     img {
                         src: asset!("assets/history-100.png"),
@@ -78,10 +87,10 @@ pub fn Receive() -> Element {
                         on_click: move |_| {
                             if *status.read() != ReceiveStatus::Open {
                                 if let Err(e) = FileReceiver::set_receive_status(ReceiveStatus::Open) {
-                                    eprintln!("设置状态失败: {}", e);
+                                    error!("设置状态失败: {}", e);
                                 } else {
                                     status.set(ReceiveStatus::Open);
-                                    println!("状态改为: 开启");
+                                    info!("状态改为: 开启");
                                 }
                             }
                         }
@@ -94,10 +103,10 @@ pub fn Receive() -> Element {
                         on_click: move |_| {
                             if *status.read() != ReceiveStatus::Collect {
                                 if let Err(e) = FileReceiver::set_receive_status(ReceiveStatus::Collect) {
-                                    eprintln!("设置状态失败: {}", e);
+                                    error!("设置状态失败: {}", e);
                                 } else {
                                     status.set(ReceiveStatus::Collect);
-                                    println!("状态改为: 收藏");
+                                    info!("状态改为: 收藏");
                                 }
                             }
                         }
@@ -110,14 +119,21 @@ pub fn Receive() -> Element {
                         on_click: move |_| {
                             if *status.read() != ReceiveStatus::Closed {
                                 if let Err(e) = FileReceiver::set_receive_status(ReceiveStatus::Closed) {
-                                    eprintln!("设置状态失败: {}", e);
+                                    error!("设置状态失败: {}", e);
                                 } else {
                                     status.set(ReceiveStatus::Closed);
-                                    println!("状态改为: 关闭");
+                                    info!("状态改为: 关闭");
                                 }
                             }
                         }
                     }
+                }
+            }
+
+            // 全屏历史记录窗口
+            if *show_history_window.read() {
+                HistoryWindow {
+                    on_close: close_history
                 }
             }
         }

@@ -1,5 +1,6 @@
 // src/core/filereceiver.rs
-use std::net::{Ipv6Addr, SocketAddrV6};
+use std::error;
+use std::net::{Ipv6Addr, SocketAddr, SocketAddrV6};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -9,6 +10,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{Notify, Semaphore};
 use std::sync::Mutex;
 use pnet::datalink;
+use log::{info, error, warn}; // 添加日志功能
 
 pub struct FileReceiver;
 
@@ -50,29 +52,29 @@ impl FileReceiver {
     }
     
     // 设置接收状态
-    pub fn set_receive_status(status: ReceiveStatus) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn set_receive_status(status: ReceiveStatus) -> Result<(), Box<dyn error::Error>> {
         let mut current_status = RECEIVE_STATUS.lock().unwrap();
         *current_status = status;
         
         match &*current_status {
             ReceiveStatus::Closed => {
-                println!("接收功能已关闭");
+                info!("接收功能已关闭");
                 // 如果服务器正在运行，停止它
                 if SERVER_RUNNING.load(Ordering::SeqCst) {
                     tokio::spawn(async {
                         if let Err(e) = Self::stop_server().await {
-                            eprintln!("停止服务器时出错: {}", e);
+                            error!("停止服务器时出错: {}", e);
                         }
                     });
                 }
             }
             ReceiveStatus::Open | ReceiveStatus::Collect => {
-                println!("接收功能已开启 - 接收所有文件");
+                info!("接收功能已开启 - 接收所有文件");
                 // 如果服务器未运行，启动它
                 if !SERVER_RUNNING.load(Ordering::SeqCst) {
                     tokio::spawn(async {
                         if let Err(e) = Self::start_server().await {
-                            eprintln!("启动服务器时出错: {}", e);
+                            error!("启动服务器时出错: {}", e);
                         }
                     });
                 }
@@ -100,11 +102,11 @@ impl FileReceiver {
         }
     }
     
-    pub async fn start_server() -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn start_server() -> Result<(), Box<dyn error::Error>> {
         // 检查当前状态，如果是关闭状态则不启动服务器
         let status = Self::get_receive_status();
         if status == ReceiveStatus::Closed {
-            println!("接收功能已关闭，不启动服务器");
+            info!("接收功能已关闭，不启动服务器");
             return Ok(());
         }
         
@@ -122,9 +124,9 @@ impl FileReceiver {
         let addr = SocketAddrV6::new("::".parse()?, 6789, 0, 0);
         let listener = TcpListener::bind(addr).await?;
         
-        println!("文件接收服务器启动，监听在: {}", addr);
-        println!("当前接收模式: {:?}", status);
-        println!("等待连接... (按停止按钮可关闭服务器)");
+        info!("文件接收服务器启动，监听在: {}", addr);
+        info!("当前接收模式: {:?}", status);
+        info!("等待连接... (按停止按钮可关闭服务器)");
         
         // 使用 tokio::select! 来同时监听连接和停止信号
         loop {
@@ -132,12 +134,12 @@ impl FileReceiver {
                 accept_result = listener.accept() => {
                     match accept_result {
                         Ok((stream, peer_addr)) => {
-                            println!("接收到来自 {} 的连接", peer_addr);
+                            info!("接收到来自 {} 的连接", peer_addr);
                             
                             // 在处理连接前再次检查状态
                             let current_status = Self::get_receive_status();
                             if current_status == ReceiveStatus::Closed {
-                                println!("接收功能已关闭，拒绝连接");
+                                warn!("接收功能已关闭，拒绝连接");
                                 continue;
                             }
 
@@ -147,20 +149,20 @@ impl FileReceiver {
 
                             // 为每个连接生成一个异步任务
                             tokio::spawn(async move {
-                                if let Err(e) = Self::handle_client(stream, current_status).await {
-                                    eprintln!("处理客户端时出错: {}", e);
+                                if let Err(e) = Self::handle_client(stream, current_status, peer_addr).await {
+                                    error!("处理客户端时出错: {}", e);
                                 }
                                 // permit 在这里被 drop，释放连接计数
                                 drop(permit);
                             });
                         }
                         Err(e) => {
-                            eprintln!("接受连接时出错: {}", e);
+                            error!("接受连接时出错: {}", e);
                         }
                     }
                 }
                 _ = stop_notify.notified() => {
-                    println!("收到停止信号，关闭接收服务器...");
+                    info!("收到停止信号，关闭接收服务器...");
                     break;
                 }
             }
@@ -168,11 +170,11 @@ impl FileReceiver {
         
         // 重置运行标志
         SERVER_RUNNING.store(false, Ordering::SeqCst);
-        println!("接收服务器已安全关闭");
+        info!("接收服务器已安全关闭");
         Ok(())
     }
     
-    pub async fn stop_server() -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn stop_server() -> Result<(), Box<dyn error::Error>> {
         if SERVER_RUNNING.load(Ordering::SeqCst) {
             if let Some(notify) = STOP_NOTIFY.get() {
                 notify.notify_one();
@@ -183,31 +185,36 @@ impl FileReceiver {
         Ok(())
     }
     
-    async fn handle_client(mut stream: TcpStream, current_status: ReceiveStatus) -> Result<(), Box<dyn std::error::Error>> {
+    // 修改：添加 peer_addr 参数来记录发送方IP
+    async fn handle_client(
+        mut stream: TcpStream,
+        current_status: ReceiveStatus,
+        peer_addr: SocketAddr
+    ) -> Result<(), Box<dyn error::Error>> {
         // 首先接收身份标识（64字符固定长度）
         let mut identity_bytes = vec![0u8; 64];
         stream.read_exact(&mut identity_bytes).await?;
         let identity = String::from_utf8(identity_bytes)?;
         
-        println!("接收到身份标识: {}", identity);
+        info!("接收到身份标识: {}", identity);
         
         // 根据当前状态决定是否接收文件
         match current_status {
             ReceiveStatus::Closed => {
-                println!("接收功能已关闭，拒绝接收文件");
+                info!("接收功能已关闭，拒绝接收文件");
                 return Ok(());
             }
             ReceiveStatus::Open => {
-                println!("开启模式，接收所有文件");
+                info!("开启模式，接收所有文件");
                 // 继续处理文件接收
             }
             ReceiveStatus::Collect => {
                 // 检查身份是否在白名单中
                 if !Self::check_identity_in_whitelist(&identity).await {
-                    println!("身份 {} 不在白名单中，拒绝接收文件", identity);
+                    warn!("身份 {} 不在白名单中，拒绝接收文件", identity);
                     return Ok(());
                 }
-                println!("身份 {} 在白名单中，允许接收文件", identity);
+                info!("身份 {} 在白名单中，允许接收文件", identity);
             }
         }
         
@@ -219,11 +226,11 @@ impl FileReceiver {
         stream.read_exact(&mut file_name_bytes).await?;
         let file_name = String::from_utf8(file_name_bytes)?;
         
-        println!("接收文件: {}", file_name);
+        info!("接收文件: {}", file_name);
         
         // 接收文件大小
         let file_size = stream.read_u64().await?;
-        println!("文件大小: {} 字节", file_size);
+        info!("文件大小: {} 字节", file_size);
         
         // 创建 downloads 目录
         let downloads_dir = Self::get_downloads_dir().await?;
@@ -235,7 +242,7 @@ impl FileReceiver {
         // 处理文件名冲突
         let final_save_path = Self::get_unique_filename(save_path).await;
         
-        println!("保存文件到: {}", final_save_path.display());
+        info!("保存文件到: {}", final_save_path.display());
         
         // 创建文件
         let mut file = File::create(&final_save_path).await?;
@@ -258,18 +265,31 @@ impl FileReceiver {
             
             // 每接收 1MB 打印一次进度，避免频繁打印
             if received % (1024 * 1024) < 64 * 1024 || received == file_size {
-                println!("已接收: {}/{} 字节 ({:.1}%)",
-                         received, file_size,
-                         (received as f64 / file_size as f64) * 100.0);
+                let progress = (received as f64 / file_size as f64) * 100.0;
+                info!("已接收: {}/{} 字节 ({:.1}%)", received, file_size, progress);
             }
         }
         
-        println!("文件接收完成: {}", final_save_path.display());
+        info!("文件接收完成: {}", final_save_path.display());
+        
+        // 新增：记录文件接收信息到数据库
+        if let Err(e) = crate::core::db::AddressBook::add_file_receive_record(
+            &file_name,
+            file_size,
+            &peer_addr.ip().to_string(),
+            &identity,
+            &final_save_path.to_string_lossy(),
+        ) {
+            error!("记录文件接收信息失败: {}", e);
+        } else {
+            info!("文件接收记录已保存到数据库");
+        }
+        
         Ok(())
     }
     
     /// 获取 downloads 目录路径
-    async fn get_downloads_dir() -> Result<PathBuf, Box<dyn std::error::Error>> {
+    async fn get_downloads_dir() -> Result<PathBuf, Box<dyn error::Error>> {
         // 首先尝试获取用户目录下的 Downloads
         if let Some(mut downloads_dir) = dirs::download_dir() {
             downloads_dir.push("dioxus_file_transfer");

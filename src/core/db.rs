@@ -3,6 +3,7 @@ use rusqlite::{Connection, Result};
 use std::path::PathBuf;
 use dirs::data_dir;
 use crate::core::create_identity::CreateIdentity;
+use log::{info, debug}; // 添加日志功能
 
 pub struct AddressBook;
 
@@ -18,6 +19,17 @@ pub struct FriendEntry {
     pub id: i64,          // 主键ID
     pub address: String,  // IPv6地址
     pub alias: String,    // 备注
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct FileReceiveRecord {
+    pub id: i64,                // 主键ID
+    pub filename: String,       // 文件名
+    pub file_size: u64,         // 文件大小（字节）
+    pub sender_ipv6: String,    // 发送方IPv6地址
+    pub sender_identity: String, // 发送方身份标识
+    pub received_at: String,    // 接收时间
+    pub save_path: String,      // 保存路径
 }
 
 impl AddressBook {
@@ -75,12 +87,27 @@ impl AddressBook {
             [],
         )?;
         
+        // 创建文件接收记录表
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS file_receive_records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                filename TEXT NOT NULL,
+                file_size INTEGER NOT NULL,
+                sender_ipv6 TEXT NOT NULL,
+                sender_identity TEXT NOT NULL,
+                save_path TEXT NOT NULL,
+                received_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )",
+            [],
+        )?;
+        
         // 验证表结构
         Self::verify_table_structure()?;
         
         // 确保存在我的身份码
         Self::ensure_my_identity()?;
         
+        info!("数据库初始化完成");
         Ok(())
     }
     
@@ -92,7 +119,7 @@ impl AddressBook {
             })?
             .collect::<Result<Vec<String>>>()?;
         
-        // println!("{}列: {:?}", table_desc, columns);
+        debug!("{}列: {:?}", table_desc, columns);
         
         if !columns.contains(&column_name.to_string()) {
             return Err(rusqlite::Error::InvalidParameterName(
@@ -112,6 +139,13 @@ impl AddressBook {
         
         // 检查 friends 表结构
         Self::check_table_has_column(&conn, "friends", "address", "好友表")?;
+        
+        // 检查文件接收记录表结构
+        Self::check_table_has_column(&conn, "file_receive_records", "filename", "文件接收记录表")?;
+        Self::check_table_has_column(&conn, "file_receive_records", "file_size", "文件接收记录表")?;
+        Self::check_table_has_column(&conn, "file_receive_records", "sender_ipv6", "文件接收记录表")?;
+        Self::check_table_has_column(&conn, "file_receive_records", "sender_identity", "文件接收记录表")?;
+        Self::check_table_has_column(&conn, "file_receive_records", "save_path", "文件接收记录表")?;
         
         Ok(())
     }
@@ -135,7 +169,7 @@ impl AddressBook {
                 &[&identity_str],
             )?;
             
-            println!("已生成新的身份码: {}", identity_str);
+            info!("已生成新的身份码: {}", identity_str);
         }
         
         Ok(())
@@ -165,7 +199,7 @@ impl AddressBook {
             &[&identity_str],
         )?;
         
-        println!("已重置身份码: {}", identity_str);
+        info!("已重置身份码: {}", identity_str);
         Ok(identity_str)
     }
     
@@ -182,6 +216,7 @@ impl AddressBook {
             "INSERT INTO identities (identity, alias) VALUES (?1, ?2)",
             &[identity, alias],
         )?;
+        info!("已添加身份标识: {} ({})", alias, identity);
         Ok(())
     }
     
@@ -196,6 +231,7 @@ impl AddressBook {
             "UPDATE identities SET identity = ?1, alias = ?2 WHERE id = ?3",
             &[identity, alias, &id.to_string()],
         )?;
+        info!("已更新身份标识 ID {}: {} ({})", id, alias, identity);
         Ok(())
     }
     
@@ -203,6 +239,7 @@ impl AddressBook {
     pub fn delete_identity(id: i64) -> Result<()> {
         let conn = Self::get_connection()?;
         conn.execute("DELETE FROM identities WHERE id = ?1", [id])?;
+        info!("已删除身份标识 ID: {}", id);
         Ok(())
     }
     
@@ -234,6 +271,7 @@ impl AddressBook {
             "INSERT INTO friends (address, alias) VALUES (?1, ?2)",
             &[address, alias],
         )?;
+        info!("已添加好友: {} ({})", alias, address);
         Ok(())
     }
     
@@ -244,6 +282,7 @@ impl AddressBook {
             "UPDATE friends SET address = ?1, alias = ?2 WHERE id = ?3",
             &[address, alias, &id.to_string()],
         )?;
+        info!("已更新好友 ID {}: {} ({})", id, alias, address);
         Ok(())
     }
     
@@ -251,6 +290,7 @@ impl AddressBook {
     pub fn delete_friend(id: i64) -> Result<()> {
         let conn = Self::get_connection()?;
         conn.execute("DELETE FROM friends WHERE id = ?1", [id])?;
+        info!("已删除好友 ID: {}", id);
         Ok(())
     }
     
@@ -321,5 +361,79 @@ impl AddressBook {
             result.push(entry?);
         }
         Ok(result)
+    }
+    
+    // ===== 文件接收记录操作 =====
+    
+    fn query_file_records(
+        sql: &str,
+        params: &[&dyn rusqlite::ToSql]
+    ) -> Result<Vec<FileReceiveRecord>> {
+        let conn = Self::get_connection()?;
+        let mut stmt = conn.prepare(sql)?;
+        
+        let entries = stmt.query_map(params, |row| {
+            Ok(FileReceiveRecord {
+                id: row.get(0)?,
+                filename: row.get(1)?,
+                file_size: row.get(2)?,
+                sender_ipv6: row.get(3)?,
+                sender_identity: row.get(4)?,
+                save_path: row.get(5)?,
+                received_at: row.get(6)?,
+            })
+        })?;
+        
+        let mut result = Vec::new();
+        for entry in entries {
+            result.push(entry?);
+        }
+        Ok(result)
+    }
+    
+    /// 添加文件接收记录
+    pub fn add_file_receive_record(
+        filename: &str,
+        file_size: u64,
+        sender_ipv6: &str,
+        sender_identity: &str,
+        save_path: &str,
+    ) -> Result<()> {
+        let conn = Self::get_connection()?;
+        conn.execute(
+            "INSERT INTO file_receive_records (filename, file_size, sender_ipv6, sender_identity, save_path)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            &[filename, &file_size.to_string(), sender_ipv6, sender_identity, save_path],
+        )?;
+        
+        info!("已记录文件接收: {} ({} 字节) 来自 {}",
+              filename, file_size, sender_ipv6);
+        Ok(())
+    }
+    
+    /// 获取所有文件接收记录
+    pub fn get_all_file_receive_records() -> Result<Vec<FileReceiveRecord>> {
+        Self::query_file_records(
+            "SELECT id, filename, file_size, sender_ipv6, sender_identity, save_path, received_at
+            FROM file_receive_records
+            ORDER BY received_at DESC",
+            &[]
+        )
+    }
+    
+    /// 删除文件接收记录
+    pub fn delete_file_receive_record(id: i64) -> Result<()> {
+        let conn = Self::get_connection()?;
+        conn.execute("DELETE FROM file_receive_records WHERE id = ?1", [id])?;
+        info!("已删除文件接收记录 ID: {}", id);
+        Ok(())
+    }
+    
+    /// 清除所有记录
+    pub fn delete_all_file_receive_records() -> Result<()> {
+        let conn = Self::get_connection()?;
+        conn.execute("DELETE FROM file_receive_records", [])?;
+        info!("已清除所有文件接收记录");
+        Ok(())
     }
 }

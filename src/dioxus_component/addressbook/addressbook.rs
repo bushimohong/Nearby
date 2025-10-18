@@ -1,3 +1,4 @@
+// src/dioxus_component/addressbook/addressbook.rs
 use dioxus::prelude::*;
 use super::add_member::AddModal;
 use super::friends::FriendsList;

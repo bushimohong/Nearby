@@ -1,5 +1,7 @@
+// src/dioxus_component/send/send.rs
 use dioxus::prelude::*;
 use crate::core::filesender::FileSender;
+use log::{info, error};
 
 #[component]
 pub fn Send() -> Element {
@@ -279,11 +281,11 @@ pub fn Send() -> Element {
                                     
                                     match FileSender::send_file(&ip, file_path).await {
                                         Ok(_) => {
-                                            println!("发送成功: {}", file_path);
+                                            info!("发送成功: {}", file_path);
                                             success_count += 1;
                                         },
                                         Err(e) => {
-                                            println!("发送失败: {} - {}", file_path, e);
+                                            error!("发送失败: {} - {}", file_path, e);
                                             fail_count += 1;
                                         },
                                     }

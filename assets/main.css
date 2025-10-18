@@ -58,5 +58,35 @@
     opacity: 0.8;
 }
 
+.back-item:hover {
+    background-color: rgba(0, 0, 0, 0.1) !important;
+    border-radius: 50% !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+}
 
+/* 历史记录项悬停效果 */
+.history-item:hover {
+    background-color: #f8f8f8 !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+}
+
+/* 更多按钮悬停效果 */
+.more-button:hover {
+    background-color: #f0f0f0 !important;
+}
+
+/* 清除按钮悬停效果 */
+button[style*="background: #ff4444"]:hover {
+    background-color: #cc3333 !important;
+}
+
+/* 关闭按钮悬停效果 */
+button[style*="background: #f0f0f0"]:hover {
+    background-color: #e0e0e0 !important;
+}
+
+/* 对话框关闭按钮悬停效果 */
+button[style*="color: #999"]:hover {
+    color: #666 !important;
+}
 

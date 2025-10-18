@@ -1,3 +1,4 @@
+// src/dioxus_component/settings/setting.rs
 use dioxus::prelude::*;
 use crate::core::db::AddressBook;
 
@@ -295,37 +296,6 @@ fn IdentitySection(
                             span { "  重置身份码" }
                         }
                     }
-                }
-            }
-        }
-    }
-}
-
-#[component]
-fn SettingItem(title: &'static str) -> Element {
-    rsx! {
-        div {
-            style: "
-                padding: 15px;
-                margin-bottom: 10px;
-                background-color: white;
-                border-radius: 8px;
-                border: 1px solid #e0e0e0;
-                cursor: pointer;
-            ",
-            onclick: move |_| println!("点击了: {}", title),
-            
-            div {
-                style: "display: flex; justify-content: space-between; align-items: center;",
-                
-                span {
-                    style: "color: #333;",
-                    "{title}"
-                }
-                
-                span {
-                    style: "color: #999;",
-                    "›"
                 }
             }
         }
