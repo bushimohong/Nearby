@@ -6,6 +6,7 @@ mod dioxus_component;
 mod core;
 
 fn main() {
+	env_logger::init();
 	let cfg = Config::new().with_window(
 		WindowBuilder::new()
 			.with_title("Nearby")

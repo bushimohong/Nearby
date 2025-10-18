@@ -10,7 +10,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{Notify, Semaphore};
 use std::sync::Mutex;
 use pnet::datalink;
-use log::{info, error, warn}; // 添加日志功能
+use log::{info, error, warn};
 
 pub struct FileReceiver;
 
@@ -102,6 +102,75 @@ impl FileReceiver {
         }
     }
     
+    // 执行 Noise 协议握手（作为响应者）
+    async fn perform_noise_handshake(stream: &mut TcpStream) -> Result<snow::TransportState, Box<dyn error::Error>> {
+        info!("开始 Noise 协议握手...");
+        
+        // 创建响应者 - 使用正确的 API
+        let builder = snow::Builder::new("Noise_XX_25519_ChaChaPoly_BLAKE2s".parse()?);
+        let static_key = builder.generate_keypair()?.private;
+        let mut noise = builder
+            .local_private_key(&static_key)
+            .build_responder()?;
+        
+        // 接收握手消息
+        let mut handshake_buffer = vec![0u8; 65535];
+        
+        // 接收第一条消息
+        let len = stream.read_u16().await? as usize;
+        let mut msg = vec![0u8; len];
+        stream.read_exact(&mut msg).await?;
+        
+        // 读取并消费第一条消息
+        let _ = noise.read_message(&msg, &mut handshake_buffer)?;
+        
+        // 发送响应消息
+        let len = noise.write_message(&[], &mut handshake_buffer)?;
+        stream.write_u16(len as u16).await?;
+        stream.write_all(&handshake_buffer[..len]).await?;
+        
+        // 接收第三条消息
+        let len = stream.read_u16().await? as usize;
+        let mut msg = vec![0u8; len];
+        stream.read_exact(&mut msg).await?;
+        
+        // 读取第三条消息完成握手
+        let _ = noise.read_message(&msg, &mut handshake_buffer)?;
+        
+        // 转换为传输模式
+        let transport = noise.into_transport_mode()?;
+        
+        info!("Noise 协议握手完成");
+        Ok(transport)
+    }
+    
+    // 使用加密通道读取数据
+    async fn read_encrypted(transport: &mut snow::TransportState, stream: &mut TcpStream, buffer: &mut [u8]) -> Result<usize, Box<dyn error::Error>> {
+        // 先读取加密数据的长度
+        let encrypted_len = stream.read_u16().await? as usize;
+        let mut encrypted_data = vec![0u8; encrypted_len];
+        stream.read_exact(&mut encrypted_data).await?;
+        
+        // 解密数据
+        let len = transport.read_message(&encrypted_data, buffer)?;
+        Ok(len)
+    }
+    
+    // 使用加密通道写入数据
+    #[allow(dead_code)]
+    async fn write_encrypted(transport: &mut snow::TransportState, stream: &mut TcpStream, data: &[u8]) -> Result<(), Box<dyn error::Error>> {
+        let mut buffer = vec![0u8; 65535];
+        
+        // 加密数据
+        let len = transport.write_message(data, &mut buffer)?;
+        
+        // 发送加密数据的长度和数据
+        stream.write_u16(len as u16).await?;
+        stream.write_all(&buffer[..len]).await?;
+        
+        Ok(())
+    }
+    
     pub async fn start_server() -> Result<(), Box<dyn error::Error>> {
         // 检查当前状态，如果是关闭状态则不启动服务器
         let status = Self::get_receive_status();
@@ -126,6 +195,7 @@ impl FileReceiver {
         
         info!("文件接收服务器启动，监听在: {}", addr);
         info!("当前接收模式: {:?}", status);
+        info!("使用 Noise 协议加密传输");
         info!("等待连接... (按停止按钮可关闭服务器)");
         
         // 使用 tokio::select! 来同时监听连接和停止信号
@@ -191,9 +261,12 @@ impl FileReceiver {
         current_status: ReceiveStatus,
         peer_addr: SocketAddr
     ) -> Result<(), Box<dyn error::Error>> {
-        // 首先接收身份标识（64字符固定长度）
+        // 首先进行 Noise 协议握手
+        let mut transport = Self::perform_noise_handshake(&mut stream).await?;
+        
+        // 接收身份标识（64字符固定长度）
         let mut identity_bytes = vec![0u8; 64];
-        stream.read_exact(&mut identity_bytes).await?;
+        Self::read_encrypted(&mut transport, &mut stream, &mut identity_bytes).await?;
         let identity = String::from_utf8(identity_bytes)?;
         
         info!("接收到身份标识: {}", identity);
@@ -219,17 +292,22 @@ impl FileReceiver {
         }
         
         // 接收文件名长度
-        let file_name_len = stream.read_u64().await?;
+        let mut file_name_len_bytes = vec![0u8; 8];
+        Self::read_encrypted(&mut transport, &mut stream, &mut file_name_len_bytes).await?;
+        let file_name_len = u64::from_be_bytes(file_name_len_bytes.try_into().unwrap());
         
         // 接收文件名
         let mut file_name_bytes = vec![0u8; file_name_len as usize];
-        stream.read_exact(&mut file_name_bytes).await?;
+        Self::read_encrypted(&mut transport, &mut stream, &mut file_name_bytes).await?;
         let file_name = String::from_utf8(file_name_bytes)?;
         
         info!("接收文件: {}", file_name);
         
         // 接收文件大小
-        let file_size = stream.read_u64().await?;
+        let mut file_size_bytes = vec![0u8; 8];
+        Self::read_encrypted(&mut transport, &mut stream, &mut file_size_bytes).await?;
+        let file_size = u64::from_be_bytes(file_size_bytes.try_into().unwrap());
+        
         info!("文件大小: {} 字节", file_size);
         
         // 创建 downloads 目录
@@ -253,7 +331,7 @@ impl FileReceiver {
         
         while received < file_size {
             let bytes_to_read = std::cmp::min(buffer.len() as u64, file_size - received) as usize;
-            let bytes_read = stream.read(&mut buffer[..bytes_to_read]).await?;
+            let bytes_read = Self::read_encrypted(&mut transport, &mut stream, &mut buffer[..bytes_to_read]).await?;
             
             if bytes_read == 0 {
                 break;
@@ -292,7 +370,7 @@ impl FileReceiver {
     async fn get_downloads_dir() -> Result<PathBuf, Box<dyn error::Error>> {
         // 首先尝试获取用户目录下的 Downloads
         if let Some(mut downloads_dir) = dirs::download_dir() {
-            downloads_dir.push("dioxus_file_transfer");
+            downloads_dir.push("Nearby-receive");
             return Ok(downloads_dir);
         }
         
