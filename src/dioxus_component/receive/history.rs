@@ -238,10 +238,6 @@ pub fn HistoryWindow(on_close: EventHandler) -> Element {
                                                 display: flex;
                                                 align-items: center;
                                             ",
-                                            span {
-                                                style: "margin-right: 8px;",
-                                                "📄"
-                                            }
                                             "{record.filename}"
                                         }
                                         div {
@@ -252,10 +248,10 @@ pub fn HistoryWindow(on_close: EventHandler) -> Element {
                                                 color: #666;
                                             ",
                                             span {
-                                                "📅 {format_date(&record.received_at)}"
+                                                "{format_date(&record.received_at)}"
                                             }
                                             span {
-                                                "💾 {format_size(record.file_size, DECIMAL)}"
+                                                "{format_size(record.file_size, DECIMAL)}"
                                             }
                                         }
                                     }

@@ -40,24 +40,54 @@
     background-color: #f0f0f0;
 }
 
+/*.nav-item {*/
+/*    transition: all 0.2s ease;*/
+/*    border-radius: 8px; !* 可选：添加圆角 *!*/
+/*    padding: 8px; !* 可选：增加内边距 *!*/
+/*}*/
+
+/*.nav-item:hover {*/
+/*    background-color: #f0f0f0; !* 浅灰色背景 *!*/
+/*}*/
+
+/*.nav-item:hover img {*/
+/*    opacity: 0.8;*/
+/*}*/
+
+/*.nav-item:hover .indicator {*/
+/*    opacity: 0.8;*/
+/*}*/
+
 .nav-item {
-    transition: all 0.2s ease;
-    border-radius: 8px; /* 可选：添加圆角 */
-    padding: 8px; /* 可选：增加内边距 */
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 8px;
+    padding: 8px;
+    position: relative;
 }
 
 .nav-item:hover {
-    background-color: #f0f0f0; /* 浅灰色背景 */
+    background-color: #f5f5f5;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.nav-item:active {
+    transform: translateY(0);
+    transition-duration: 0.1s;
 }
 
 .nav-item:hover img {
     opacity: 0.8;
+    transform: scale(1.05);
 }
 
-.nav-item:hover .indicator {
-    opacity: 0.8;
+.nav-item.active {
+    background-color: #e3f2fd;
 }
 
+.nav-item.active:hover {
+    background-color: #bbdefb;
+}
 .back-item:hover {
     background-color: rgba(0, 0, 0, 0.1) !important;
     border-radius: 50% !important;
@@ -90,3 +120,122 @@ button[style*="color: #999"]:hover {
     color: #666 !important;
 }
 
+/* 胶囊按钮悬停效果 */
+.status-button:hover {
+    filter: brightness(0.9);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* 发送页面按钮悬停效果 */
+.action-button:hover {
+    filter: brightness(0.95);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* 移除按钮悬停效果 */
+.remove-button:hover {
+    background-color: #dc2626 !important;
+    transform: scale(1.05);
+}
+
+/* 禁用状态按钮 */
+.action-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+.remove-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none !important;
+}
+
+/* 地址簿按钮悬停效果 */
+.tab-button:hover {
+    background-color: #2563eb !important;
+    color: white !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(37, 99, 235, 0.2);
+}
+
+.add-button:hover {
+    background-color: #2563eb !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+
+.search-button:hover {
+    background-color: #2563eb !important;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.2);
+}
+
+.modal-button:hover {
+    filter: brightness(0.95);
+    transform: translateY(-1px);
+}
+
+.modal-secondary-button:hover {
+    background-color: #4b5563 !important;
+    transform: translateY(-1px);
+}
+
+.modal-danger-button:hover {
+    background-color: #dc2626 !important;
+    transform: translateY(-1px);
+}
+
+.confirm-delete-button:hover {
+    background-color: #b91c1c !important;
+    transform: scale(1.05);
+}
+
+.cancel-delete-button:hover {
+    background-color: #4b5563 !important;
+    transform: scale(1.05);
+}
+
+/* 列表项悬停效果 */
+.friend-item:hover,
+.identity-item:hover {
+    background-color: #f8fafc !important;
+    border-color: #3b82f6 !important;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+}
+
+/* 模态框关闭按钮悬停效果 */
+.modal-close-button:hover {
+    color: #374151 !important;
+    background-color: #f3f4f6 !important;
+    border-radius: 50%;
+}
+
+/* 设置页面按钮悬停效果 */
+.settings-primary-button:hover {
+    background-color: #0056b3 !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 123, 255, 0.3);
+}
+
+.settings-danger-button:hover {
+    background-color: #e04e4e !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(255, 107, 107, 0.3);
+}
+
+/* 设置项悬停效果 */
+.settings-item:hover {
+    background-color: #f8f9fa !important;
+    border-color: #007bff !important;
+}
+
+/* 成功状态按钮 */
+.settings-success-button:hover {
+    background-color: #28a745 !important;
+    transform: translateY(-1px);
+}

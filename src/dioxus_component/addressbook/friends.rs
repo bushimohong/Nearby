@@ -140,12 +140,13 @@ pub fn FriendsList(refresh_trigger: u32) -> Element {
                             font-size: 14px;
                             width: 250px;
                         ",
-                        placeholder: "搜索好友地址或备注...",
+                        placeholder: "搜索...",
                         value: "{search_query}",
                         oninput: move |e| search_query.set(e.value())
                     }
                     
                     button {
+						class: "search-button",
                         style: "
                             padding: 8px 16px;
                             background: #3b82f6;
@@ -227,6 +228,7 @@ pub fn FriendsList(refresh_trigger: u32) -> Element {
 fn FriendItem(friend: crate::core::db::FriendEntry, on_click: EventHandler) -> Element {
 	rsx! {
         div {
+			class: "friend-item",
             style: "
                 display: flex;
                 justify-content: space-between;
@@ -268,11 +270,10 @@ fn FriendItem(friend: crate::core::db::FriendEntry, on_click: EventHandler) -> E
             
             // 点击提示
             div {
-                style: "
-                    color: #9ca3af;
-                    font-size: 12px;
-                ",
-                "点击编辑"
+                img {
+                    style: "width: 24px; height: 24px;",
+                    src: asset!("assets/more-100.png"),
+                }
             }
         }
     }
@@ -337,7 +338,7 @@ fn FriendEditModal(
                         }
                         input {
                             style: "
-                                width: 100%;
+                                width: 90%;
                                 padding: 10px 12px;
                                 border: 1px solid #d1d5db;
                                 border-radius: 6px;
@@ -362,7 +363,7 @@ fn FriendEditModal(
                         }
                         input {
                             style: "
-                                width: 100%;
+                                width: 90%;
                                 padding: 10px 12px;
                                 border: 1px solid #d1d5db;
                                 border-radius: 6px;
@@ -386,6 +387,7 @@ fn FriendEditModal(
                     // 删除按钮
                     if !show_confirm_delete() {
                         button {
+							class: "modal-danger-button",
                             style: "
                                 padding: 10px 16px;
                                 background: #ef4444;
@@ -408,6 +410,7 @@ fn FriendEditModal(
                             }
                             
                             button {
+								class: "confirm-delete-button",
                                 style: "
                                     padding: 6px 12px;
                                     background: #ef4444;
@@ -424,6 +427,7 @@ fn FriendEditModal(
                             }
                             
                             button {
+								class: "cancel-delete-button",
                                 style: "
                                     padding: 6px 12px;
                                     background: #6b7280;
@@ -444,6 +448,7 @@ fn FriendEditModal(
                         style: "display: flex; gap: 12px;",
                         
                         button {
+							class: "modal-secondary-button",
                             style: "
                                 padding: 10px 20px;
                                 background: #6b7280;
@@ -458,6 +463,7 @@ fn FriendEditModal(
                         }
                         
                         button {
+							class: "modal-button",
                             style: "
                                 padding: 10px 20px;
                                 background: #3b82f6;

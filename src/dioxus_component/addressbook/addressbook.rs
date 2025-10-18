@@ -80,6 +80,7 @@ pub fn AddressBookPage() -> Element {
                     ",
                     
                     button {
+                        class: "tab-button",
                         style: "
                             width: 100%;
                             background: #3b82f6;
@@ -164,6 +165,7 @@ fn TabButton(active: bool, onclick: EventHandler, label: &'static str, icon: Ele
     
     rsx! {
         button {
+            class: "tab-button",
             style: "
                 width: 100%;
                 background: {background};

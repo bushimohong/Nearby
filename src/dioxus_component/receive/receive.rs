@@ -170,6 +170,7 @@ fn StatusButton(
     
     rsx! {
         button {
+            class: "status-button",
             style: "
                 padding: 10px 20px;
                 border: none;

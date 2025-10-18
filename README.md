@@ -1,4 +1,4 @@
-# Development
+# 简介
 
 此软件是基于ipv6地址,TCP连接的文件传输工具 
 
@@ -51,5 +51,6 @@ mohong@mohongdeMacBook-Air Nearby % tree -I assets -I target
 cargo run
 ```
 
+#### 备注
 
-
+作者是UI设计和实现的大聪明😭😭😭

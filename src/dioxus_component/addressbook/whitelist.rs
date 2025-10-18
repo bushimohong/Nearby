@@ -108,7 +108,7 @@ pub fn Whitelist(refresh_trigger: u32) -> Element {
         div {
             style: "
                 padding: 20px;
-                height: 100%;
+                height: 90%;
                 display: flex;
                 flex-direction: column;
             ",
@@ -140,12 +140,13 @@ pub fn Whitelist(refresh_trigger: u32) -> Element {
                             font-size: 14px;
                             width: 250px;
                         ",
-                        placeholder: "搜索身份标识或备注...",
+                        placeholder: "搜索...",
                         value: "{search_query}",
                         oninput: move |e| search_query.set(e.value())
                     }
                     
                     button {
+						class: "search-button",
                         style: "
                             padding: 8px 16px;
                             background: #3b82f6;
@@ -227,6 +228,7 @@ pub fn Whitelist(refresh_trigger: u32) -> Element {
 fn IdentityItem(identity: crate::core::db::IdentityEntry, on_click: EventHandler) -> Element {
 	rsx! {
         div {
+			class: "identity-item",
             style: "
                 display: flex;
                 justify-content: space-between;
@@ -269,11 +271,10 @@ fn IdentityItem(identity: crate::core::db::IdentityEntry, on_click: EventHandler
             
             // 点击提示
             div {
-                style: "
-                    color: #9ca3af;
-                    font-size: 12px;
-                ",
-                "点击编辑"
+                img {
+                    style: "width: 24px; height: 24px;",
+                    src: asset!("assets/more-100.png"),
+                }
             }
         }
     }
@@ -338,7 +339,7 @@ fn IdentityEditModal(
                         }
                         input {
                             style: "
-                                width: 100%;
+                                width: 90%;
                                 padding: 10px 12px;
                                 border: 1px solid #d1d5db;
                                 border-radius: 6px;
@@ -363,7 +364,7 @@ fn IdentityEditModal(
                         }
                         input {
                             style: "
-                                width: 100%;
+                                width: 90%;
                                 padding: 10px 12px;
                                 border: 1px solid #d1d5db;
                                 border-radius: 6px;
@@ -387,6 +388,7 @@ fn IdentityEditModal(
                     // 删除按钮
                     if !show_confirm_delete() {
                         button {
+							class: "modal-danger-button",
                             style: "
                                 padding: 10px 16px;
                                 background: #ef4444;
@@ -409,6 +411,7 @@ fn IdentityEditModal(
                             }
                             
                             button {
+								class: "confirm-delete-button",
                                 style: "
                                     padding: 6px 12px;
                                     background: #ef4444;
@@ -425,6 +428,7 @@ fn IdentityEditModal(
                             }
                             
                             button {
+								class: "cancel-delete-button",
                                 style: "
                                     padding: 6px 12px;
                                     background: #6b7280;
@@ -445,6 +449,7 @@ fn IdentityEditModal(
                         style: "display: flex; gap: 12px;",
                         
                         button {
+							class: "modal-secondary-button",
                             style: "
                                 padding: 10px 20px;
                                 background: #6b7280;
@@ -459,6 +464,7 @@ fn IdentityEditModal(
                         }
                         
                         button {
+							class: "modal-button",
                             style: "
                                 padding: 10px 20px;
                                 background: #3b82f6;

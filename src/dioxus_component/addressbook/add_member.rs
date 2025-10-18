@@ -140,6 +140,7 @@ pub fn AddModal(on_close: EventHandler, active_tab: &'static str, on_success: Ev
                     }
                     
                     button {
+						class: "modal-close-button",
                         style: "
                             background: none;
                             border: none;
@@ -165,6 +166,7 @@ pub fn AddModal(on_close: EventHandler, active_tab: &'static str, on_success: Ev
                         ",
                         
                         button {
+							class: "tab-button",
                             style: if *current_step.read() == "friend" {
                                 "
                                     flex: 1;
@@ -193,6 +195,7 @@ pub fn AddModal(on_close: EventHandler, active_tab: &'static str, on_success: Ev
                         }
                         
                         button {
+							class: "tab-button",
                             style: if *current_step.read() == "identity" {
                                 "
                                     flex: 1;
@@ -268,7 +271,7 @@ pub fn AddModal(on_close: EventHandler, active_tab: &'static str, on_success: Ev
                                     }
                                     input {
                                         style: "
-                                            width: 100%;
+                                            width: 90%;
                                             padding: 10px 12px;
                                             border: 1px solid #d1d5db;
                                             border-radius: 8px;
@@ -293,7 +296,7 @@ pub fn AddModal(on_close: EventHandler, active_tab: &'static str, on_success: Ev
                                     }
                                     input {
                                         style: "
-                                            width: 100%;
+                                            width: 90%;
                                             padding: 10px 12px;
                                             border: 1px solid #d1d5db;
                                             border-radius: 8px;
@@ -307,6 +310,7 @@ pub fn AddModal(on_close: EventHandler, active_tab: &'static str, on_success: Ev
                                 }
                                 
                                 button {
+									class: "modal-button",
                                     style: "
                                         width: 100%;
                                         background: #3b82f6;
@@ -339,7 +343,7 @@ pub fn AddModal(on_close: EventHandler, active_tab: &'static str, on_success: Ev
                                     }
                                     input {
                                         style: "
-                                            width: 100%;
+                                            width: 90%;
                                             padding: 10px 12px;
                                             border: 1px solid #d1d5db;
                                             border-radius: 8px;
@@ -365,7 +369,7 @@ pub fn AddModal(on_close: EventHandler, active_tab: &'static str, on_success: Ev
                                     }
                                     input {
                                         style: "
-                                            width: 100%;
+                                            width: 90%;
                                             padding: 10px 12px;
                                             border: 1px solid #d1d5db;
                                             border-radius: 8px;

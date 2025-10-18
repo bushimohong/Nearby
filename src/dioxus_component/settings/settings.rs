@@ -156,6 +156,7 @@ fn IdentitySection(
 ) -> Element {
     rsx! {
         div {
+            class: "settings-item",
             style: "
                 padding: 20px;
                 margin-bottom: 15px;
@@ -222,6 +223,11 @@ fn IdentitySection(
                 
                 // 复制按钮
                 button {
+                    class: if *copy_success.read() {
+                        "settings-success-button"
+                    } else {
+                        "settings-primary-button"
+                    },
                     style: "
                         flex: 1;
                         padding: 10px;
@@ -261,6 +267,11 @@ fn IdentitySection(
                 
                 // 重置按钮
                 button {
+                    class: if *reset_success.read() {
+                        "settings-success-button"
+                    } else {
+                        "settings-danger-button"
+                    },
                     style: "
                         flex: 1;
                         padding: 10px;

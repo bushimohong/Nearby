@@ -80,6 +80,7 @@ pub fn Send() -> Element {
                                 margin-bottom: 16px;
                             ",
                             button {
+                                class: "action-button",
                                 style: "
                                     background: linear-gradient(135deg, #10b981 0%, #059669 100%);
                                     color: white;
@@ -116,6 +117,7 @@ pub fn Send() -> Element {
                             }
                             
                             button {
+                                class: "action-button",
                                 style: "
                                     background-color: #ef4444;
                                     color: white;
@@ -183,6 +185,7 @@ pub fn Send() -> Element {
                                             "{file_path}"
                                         }
                                         button {
+                                            class: "remove-button",
                                             style: "
                                                 background-color: #ef4444;
                                                 color: white;
@@ -242,6 +245,7 @@ pub fn Send() -> Element {
 
                     // 发送按钮
                     button {
+                        class: "action-button",
                         style: "
                             background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
                             color: white;
