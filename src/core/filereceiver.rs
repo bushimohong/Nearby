@@ -12,6 +12,9 @@ use std::sync::Mutex;
 use pnet::datalink;
 use log::{info, error, warn};
 
+// 定义可发送的错误类型
+type ReceiveError = Box<dyn error::Error + Send + Sync>;
+
 pub struct FileReceiver;
 
 static SERVER_RUNNING: AtomicBool = AtomicBool::new(false);
@@ -52,7 +55,7 @@ impl FileReceiver {
     }
     
     // 设置接收状态
-    pub fn set_receive_status(status: ReceiveStatus) -> Result<(), Box<dyn error::Error>> {
+    pub fn set_receive_status(status: ReceiveStatus) -> Result<(), ReceiveError> {
         let mut current_status = RECEIVE_STATUS.lock().unwrap();
         *current_status = status;
         
@@ -103,7 +106,7 @@ impl FileReceiver {
     }
     
     // 执行 Noise 协议握手（作为响应者）
-    async fn perform_noise_handshake(stream: &mut TcpStream) -> Result<snow::TransportState, Box<dyn error::Error>> {
+    async fn perform_noise_handshake(stream: &mut TcpStream) -> Result<snow::TransportState, ReceiveError> {
         info!("开始 Noise 协议握手...");
         
         // 创建响应者 - 使用正确的 API
@@ -144,29 +147,37 @@ impl FileReceiver {
         Ok(transport)
     }
     
-    // 使用加密通道读取数据
-    async fn read_encrypted(transport: &mut snow::TransportState, stream: &mut TcpStream, buffer: &mut [u8]) -> Result<usize, Box<dyn error::Error>> {
+    // 修改 read_encrypted 函数：
+    async fn read_encrypted(transport: &mut snow::TransportState, stream: &mut TcpStream, buffer: &mut [u8]) -> Result<usize, ReceiveError> {
         // 先读取加密数据的长度
         let encrypted_len = stream.read_u16().await? as usize;
         if encrypted_len == 0 {
             // 长度为0表示传输结束
             return Ok(0);
         }
+        
+        // 检查缓冲区是否足够大
         if encrypted_len > 65535 {
-            error!("错误的加密数据长度");
+            error!("错误的加密数据长度: {}", encrypted_len);
             return Err("无效的加密数据长度".into());
         }
+        
         let mut encrypted_data = vec![0u8; encrypted_len];
         stream.read_exact(&mut encrypted_data).await?;
         
         // 解密数据
-        let len = transport.read_message(&encrypted_data, buffer)?;
-        Ok(len)
+        match transport.read_message(&encrypted_data, buffer) {
+            Ok(len) => Ok(len),
+            Err(e) => {
+                error!("解密数据失败: {}", e);
+                Err(e.into())
+            }
+        }
     }
     
     // 使用加密通道写入数据
     #[allow(dead_code)]
-    async fn write_encrypted(transport: &mut snow::TransportState, stream: &mut TcpStream, data: &[u8]) -> Result<(), Box<dyn error::Error>> {
+    async fn write_encrypted(transport: &mut snow::TransportState, stream: &mut TcpStream, data: &[u8]) -> Result<(), ReceiveError> {
         let mut buffer = vec![0u8; 65535];
         
         // 加密数据
@@ -184,14 +195,14 @@ impl FileReceiver {
     }
     
     // 发送传输结束信号
-    async fn send_transfer_complete(stream: &mut TcpStream) -> Result<(), Box<dyn error::Error>> {
+    async fn send_transfer_complete(stream: &mut TcpStream) -> Result<(), ReceiveError> {
         // 发送长度为0的数据包表示传输结束
         stream.write_u16(0).await?;
         stream.flush().await?;
         Ok(())
     }
     
-    pub async fn start_server() -> Result<(), Box<dyn error::Error>> {
+    pub async fn start_server() -> Result<(), ReceiveError> {
         // 检查当前状态，如果是关闭状态则不启动服务器
         let status = Self::get_receive_status();
         if status == ReceiveStatus::Closed {
@@ -264,7 +275,7 @@ impl FileReceiver {
         Ok(())
     }
     
-    pub async fn stop_server() -> Result<(), Box<dyn error::Error>> {
+    pub async fn stop_server() -> Result<(), ReceiveError> {
         if SERVER_RUNNING.load(Ordering::SeqCst) {
             if let Some(notify) = STOP_NOTIFY.get() {
                 notify.notify_one();
@@ -279,7 +290,7 @@ impl FileReceiver {
         mut stream: TcpStream,
         current_status: ReceiveStatus,
         peer_addr: SocketAddr
-    ) -> Result<(), Box<dyn error::Error>> {
+    ) -> Result<(), ReceiveError> {
         // 首先进行 Noise 协议握手
         let mut transport = Self::perform_noise_handshake(&mut stream).await?;
         
@@ -364,33 +375,47 @@ impl FileReceiver {
         // 创建文件
         let mut file = File::create(&final_save_path).await?;
         
+        let buffer_size = if file_size <= 10 * 1024 * 1024 {
+            64 * 1024      // 小文件: 64KB
+        } else if file_size <= 100 * 1024 * 1024 {
+            256 * 1024     // 中等文件: 256KB
+        } else {
+            512 * 1024     // 大文件: 512KB
+        };
+        
         // 使用缓冲区异步接收文件内容
         let mut received = 0;
-        let mut buffer = vec![0u8; 64 * 1024]; // 64KB 缓冲区
+        let mut buffer = vec![0u8;  buffer_size]; // 减小缓冲区大小到32KB
         
         while received < file_size {
             let bytes_to_read = std::cmp::min(buffer.len() as u64, file_size - received) as usize;
-            let bytes_read = Self::read_encrypted(&mut transport, &mut stream, &mut buffer[..bytes_to_read]).await?;
-            
-            if bytes_read == 0 {
-                // 传输结束信号
-                if received == file_size {
-                    info!("文件传输正常结束");
-                    break;
-                } else {
-                    error!("文件传输中断: 已接收 {}/{} 字节", received, file_size);
-                    return Err("文件传输中断".into());
+            match Self::read_encrypted(&mut transport, &mut stream, &mut buffer[..bytes_to_read]).await {
+                Ok(bytes_read) => {
+                    if bytes_read == 0 {
+                        // 传输结束信号
+                        if received == file_size {
+                            info!("文件传输正常结束");
+                            break;
+                        } else {
+                            error!("文件传输中断: 已接收 {}/{} 字节", received, file_size);
+                            return Err("文件传输中断".into());
+                        }
+                    }
+                    
+                    // 异步写入文件
+                    file.write_all(&buffer[..bytes_read]).await?;
+                    received += bytes_read as u64;
+                    
+                    // 每接收 1MB 打印一次进度，避免频繁打印
+                    if received % (1024 * 1024) < 32 * 1024 || received == file_size {
+                        let progress = (received as f64 / file_size as f64) * 100.0;
+                        info!("已接收: {}/{} 字节 ({:.1}%)", received, file_size, progress);
+                    }
                 }
-            }
-            
-            // 异步写入文件
-            file.write_all(&buffer[..bytes_read]).await?;
-            received += bytes_read as u64;
-            
-            // 每接收 1MB 打印一次进度，避免频繁打印
-            if received % (1024 * 1024) < 64 * 1024 || received == file_size {
-                let progress = (received as f64 / file_size as f64) * 100.0;
-                info!("已接收: {}/{} 字节 ({:.1}%)", received, file_size, progress);
+                Err(e) => {
+                    error!("读取加密数据失败: {}", e);
+                    return Err(e);
+                }
             }
         }
         
@@ -415,7 +440,7 @@ impl FileReceiver {
     }
     
     /// 获取 downloads 目录路径
-    async fn get_downloads_dir() -> Result<PathBuf, Box<dyn error::Error>> {
+    async fn get_downloads_dir() -> Result<PathBuf, ReceiveError> {
         // 首先尝试获取用户目录下的 Downloads
         if let Some(mut downloads_dir) = dirs::download_dir() {
             downloads_dir.push("Nearby-receive");

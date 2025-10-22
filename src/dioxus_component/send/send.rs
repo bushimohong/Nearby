@@ -316,18 +316,27 @@ pub fn Send() -> Element {
 
                                 // 对每个目标和每个文件进行发送
                                 for target in &target_list {
-                                    for (index, file_path) in files.iter().enumerate() {
-                                        status_message.set(format!("正在发送文件 {}/{} 到 {}...", index + 1, files.len(), target));
-                
-                                        match FileSender::send_file(target, file_path).await {
-                                            Ok(_) => {
-                                                info!("发送成功: {} 到 {}", file_path, target);
-                                                success_count += 1;
-                                            },
-                                            Err(e) => {
-                                                error!("发送失败: {} 到 {} - {}", file_path, target, e);
-                                                fail_count += 1;
-                                            },
+                                    status_message.set(format!("正在并发发送 {} 个文件到 {}...", files.len(), target));
+            
+                                    // 使用并发发送函数
+                                    match FileSender::send_files(target, &files).await {
+                                        Ok(results) => {
+                                            for (file_path, result) in results {
+                                                match result {
+                                                    Ok(_) => {
+                                                        info!("发送成功: {} 到 {}", file_path, target);
+                                                        success_count += 1;
+                                                    },
+                                                    Err(e) => {
+                                                        error!("发送失败: {} 到 {} - {}", file_path, target, e);
+                                                        fail_count += 1;
+                                                    },
+                                                }
+                                            }
+                                        },
+                                        Err(e) => {
+                                            error!("并发发送到 {} 失败: {}", target, e);
+                                            fail_count += files.len(); // 所有文件都失败
                                         }
                                     }
                                 }

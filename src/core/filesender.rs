@@ -1,147 +1,65 @@
 // src/core/filesender.rs
 use std::error;
 use std::net::SocketAddrV6;
+use std::sync::Arc;
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use crate::core::db::AddressBook;
-use log::{info, error, debug};
+use log::{info, error};
+use tokio::sync::Semaphore;
+
+const CONCURRENT_TRANSFERS: usize = 5;
+type SendError = Box<dyn error::Error + Send + Sync>;
 
 pub struct FileSender;
 
 impl FileSender {
     // 执行 Noise 协议握手（作为发起者）
-    async fn perform_noise_handshake(stream: &mut TcpStream) -> Result<snow::TransportState, Box<dyn error::Error>> {
+    async fn perform_noise_handshake(stream: &mut TcpStream) -> Result<snow::TransportState, SendError> {
         info!("开始 Noise 协议握手...");
         
-        // 先解析 Noise 参数
-        let noise_params = match "Noise_XX_25519_ChaChaPoly_BLAKE2s".parse() {
-            Ok(params) => {
-                info!("成功解析 Noise 参数: Noise_XX_25519_ChaChaPoly_BLAKE2s");
-                params
-            },
-            Err(e) => {
-                error!("解析 Noise 参数失败: {}", e);
-                return Err(Box::new(e));
-            }
-        };
-        
         // 创建发起者
-        let builder = snow::Builder::new(noise_params);
-        let static_key = match builder.generate_keypair() {
-            Ok(kp) => {
-                info!("成功生成密钥对");
-                kp.private
-            },
-            Err(e) => {
-                error!("生成密钥对失败: {}", e);
-                return Err(e.into());
-            }
-        };
-        
-        let mut noise = match builder
+        let builder = snow::Builder::new("Noise_XX_25519_ChaChaPoly_BLAKE2s".parse()?);
+        let static_key = builder.generate_keypair()?.private;
+        let mut noise = builder
             .local_private_key(&static_key)
-            .build_initiator() {
-            Ok(n) => {
-                info!("成功构建 Noise 发起者");
-                n
-            },
-            Err(e) => {
-                error!("构建 Noise 发起者失败: {}", e);
-                return Err(e.into());
-            }
-        };
+            .build_initiator()?;
         
         // 发送第一条握手消息
         info!("准备发送第一条握手消息...");
         let mut handshake_buffer1 = vec![0u8; 65535];
-        let len = match noise.write_message(&[], &mut handshake_buffer1) {
-            Ok(l) => {
-                debug!("第一条握手消息长度: {} 字节", l);
-                l
-            },
-            Err(e) => {
-                error!("写入第一条握手消息失败: {}", e);
-                return Err(e.into());
-            }
-        };
+        let len = noise.write_message(&[], &mut handshake_buffer1)?;
         
-        if let Err(e) = stream.write_u16(len as u16).await {
-            error!("发送第一条握手消息长度失败: {}", e);
-            return Err(e.into());
-        }
-        if let Err(e) = stream.write_all(&handshake_buffer1[..len]).await {
-            error!("发送第一条握手消息内容失败: {}", e);
-            return Err(e.into());
-        }
+        stream.write_u16(len as u16).await?;
+        stream.write_all(&handshake_buffer1[..len]).await?;
         info!("成功发送第一条握手消息");
         
         // 接收响应消息
         info!("等待接收响应消息...");
-        let len = match stream.read_u16().await {
-            Ok(l) => {
-                let length = l as usize;
-                debug!("响应消息长度: {} 字节", length);
-                length
-            },
-            Err(e) => {
-                error!("读取响应消息长度失败: {}", e);
-                return Err(e.into());
-            }
-        };
-        
+        let len = stream.read_u16().await? as usize;
         let mut msg = vec![0u8; len];
-        if let Err(e) = stream.read_exact(&mut msg).await {
-            error!("读取响应消息内容失败: {}", e);
-            return Err(e.into());
-        }
+        stream.read_exact(&mut msg).await?;
         info!("成功接收响应消息");
         
         // 读取响应消息
         let mut handshake_buffer2 = vec![0u8; 65535];
-        if let Err(e) = noise.read_message(&msg, &mut handshake_buffer2) {
-            error!("处理响应消息失败: {}", e);
-            return Err(e.into());
-        }
+        noise.read_message(&msg, &mut handshake_buffer2)?;
         info!("成功处理响应消息");
         
         // 发送第三条握手消息
         info!("准备发送第三条握手消息...");
         let mut handshake_buffer3 = vec![0u8; 65535];
-        let len = match noise.write_message(&[], &mut handshake_buffer3) {
-            Ok(l) => {
-                debug!("第三条握手消息长度: {} 字节", l);
-                l
-            },
-            Err(e) => {
-                error!("写入第三条握手消息失败: {}", e);
-                return Err(e.into());
-            }
-        };
+        let len = noise.write_message(&[], &mut handshake_buffer3)?;
         
-        if let Err(e) = stream.write_u16(len as u16).await {
-            error!("发送第三条握手消息长度失败: {}", e);
-            return Err(e.into());
-        }
-        if let Err(e) = stream.write_all(&handshake_buffer3[..len]).await {
-            error!("发送第三条握手消息内容失败: {}", e);
-            return Err(e.into());
-        }
+        stream.write_u16(len as u16).await?;
+        stream.write_all(&handshake_buffer3[..len]).await?;
         info!("成功发送第三条握手消息");
         
         // 转换为传输模式
-        let transport = match noise.into_transport_mode() {
-            Ok(t) => {
-                info!("成功转换为传输模式");
-                t
-            },
-            Err(e) => {
-                error!("转换为传输模式失败: {}", e);
-                return Err(e.into());
-            }
-        };
-        
+        let transport = noise.into_transport_mode()?;
         info!("Noise 协议握手完成");
+        
         Ok(transport)
     }
     
@@ -181,43 +99,25 @@ impl FileSender {
     }
     
     // 使用加密通道写入数据
-    async fn write_encrypted(transport: &mut snow::TransportState, stream: &mut TcpStream, data: &[u8]) -> Result<(), Box<dyn error::Error>> {
+    async fn write_encrypted(transport: &mut snow::TransportState, stream: &mut TcpStream, data: &[u8]) -> Result<(), SendError> {
         let mut buffer = vec![0u8; 65535];
         
         // 加密数据
-        let len = match transport.write_message(data, &mut buffer) {
-            Ok(l) => l,
-            Err(e) => {
-                error!("加密数据失败: {}", e);
-                return Err(e.into());
-            }
-        };
+        let len = transport.write_message(data, &mut buffer)?;
         
         // 发送加密数据的长度和数据
-        if let Err(e) = stream.write_u16(len as u16).await {
-            error!("发送加密数据长度失败: {}", e);
-            return Err(e.into());
-        }
-        if let Err(e) = stream.write_all(&buffer[..len]).await {
-            error!("发送加密数据内容失败: {}", e);
-            return Err(e.into());
-        }
+        stream.write_u16(len as u16).await?;
+        stream.write_all(&buffer[..len]).await?;
         
         Ok(())
     }
     
     // 等待传输完成确认
-    async fn wait_for_transfer_complete(stream: &mut TcpStream) -> Result<(), Box<dyn error::Error>> {
+    async fn wait_for_transfer_complete(stream: &mut TcpStream) -> Result<(), SendError> {
         info!("等待接收方的传输完成确认...");
         
         // 读取结束信号（长度为0的数据包）
-        let end_signal = match stream.read_u16().await {
-            Ok(signal) => signal,
-            Err(e) => {
-                error!("读取传输结束信号失败: {}", e);
-                return Err(e.into());
-            }
-        };
+        let end_signal = stream.read_u16().await?;
         
         if end_signal == 0 {
             info!("接收方已确认传输完成");
@@ -229,27 +129,182 @@ impl FileSender {
     }
     
     // 发送传输结束信号
-    async fn send_transfer_complete(stream: &mut TcpStream) -> Result<(), Box<dyn error::Error>> {
+    async fn send_transfer_complete(stream: &mut TcpStream) -> Result<(), SendError> {
         info!("发送传输结束信号...");
         
         // 发送长度为0的数据包表示传输结束
-        if let Err(e) = stream.write_u16(0).await {
-            error!("发送传输结束信号失败: {}", e);
-            return Err(e.into());
-        }
-        if let Err(e) = stream.flush().await {
-            error!("刷新传输结束信号失败: {}", e);
-            return Err(e.into());
-        }
+        stream.write_u16(0).await?;
+        stream.flush().await?;
         
         info!("传输结束信号已发送");
         Ok(())
     }
     
+    // 发送单个文件的内部实现
+    async fn send_single_file(
+        ipv6_addr: &str,
+        file_path: &str,
+    ) -> Result<(), SendError> {
+        // 如果 IP 地址为空，默认使用本地地址 (::1)
+        let actual_ip = if ipv6_addr.is_empty() {
+            "::1"
+        } else {
+            ipv6_addr
+        };
+        
+        // 解析IPv6地址和端口
+        let socket_addr = format!("[{}]:6789", actual_ip);
+        let addr: SocketAddrV6 = socket_addr.parse()?;
+        
+        info!("正在连接到接收方: {}", addr);
+        
+        // 连接到接收方
+        let mut stream = TcpStream::connect(addr).await?;
+        info!("已连接到接收方: {}", addr);
+        
+        // 进行 Noise 协议握手
+        let mut transport = Self::perform_noise_handshake(&mut stream).await?;
+        
+        // 获取自己的身份码
+        let my_identity = AddressBook::get_my_identity()?;
+        
+        if my_identity.len() != 64 {
+            error!("身份码长度不正确: {} (期望64字符)", my_identity.len());
+            return Err("身份码长度不正确，必须为64字符".into());
+        }
+        
+        info!("使用身份码: {}", my_identity);
+        
+        // 异步打开要发送的文件
+        let mut file = File::open(file_path).await?;
+        
+        let file_name = match std::path::Path::new(file_path).file_name() {
+            Some(name) => name.to_string_lossy().to_string(),
+            None => {
+                error!("无法从路径获取文件名: {}", file_path);
+                return Err("无效的文件路径".into());
+            }
+        };
+        
+        // 获取文件大小
+        let file_size = file.metadata().await?.len();
+        
+        info!("开始发送文件: {} ({} 字节)", file_name, file_size);
+        
+        // 首先发送身份码 (64字符固定长度) - 使用加密通道
+        Self::write_encrypted(&mut transport, &mut stream, my_identity.as_bytes()).await?;
+        info!("已发送身份码");
+        
+        // 发送文件名长度和文件名 - 使用加密通道
+        let file_name_bytes = file_name.as_bytes();
+        let file_name_len = file_name_bytes.len() as u64;
+        
+        Self::write_encrypted(&mut transport, &mut stream, &file_name_len.to_be_bytes()).await?;
+        Self::write_encrypted(&mut transport, &mut stream, file_name_bytes).await?;
+        info!("已发送文件名: {}", file_name);
+        
+        // 发送文件大小 - 使用加密通道
+        Self::write_encrypted(&mut transport, &mut stream, &file_size.to_be_bytes()).await?;
+        info!("已发送文件大小: {} 字节", file_size);
+        
+        // 使用缓冲区异步发送文件内容 - 使用加密通道
+        let mut buffer = vec![0u8; 32 * 1024]; // 减少缓冲区大小到32KB，避免加密缓冲区溢出
+        let mut total_sent = 0;
+        
+        loop {
+            let bytes_read = file.read(&mut buffer).await?;
+            
+            if bytes_read == 0 {
+                break;
+            }
+            
+            // 使用加密通道发送数据 - 只发送实际读取的数据
+            Self::write_encrypted(&mut transport, &mut stream, &buffer[..bytes_read]).await?;
+            
+            total_sent += bytes_read;
+            
+            // 每发送 1MB 打印一次进度，避免频繁打印
+            if total_sent % (1024 * 1024) < 32 * 1024 || total_sent == file_size as usize {
+                info!("已发送: {}/{} 字节 ({:.1}%)",
+                         total_sent, file_size,
+                         (total_sent as f64 / file_size as f64) * 100.0);
+            }
+        }
+        
+        // 确保所有数据都被刷新
+        stream.flush().await?;
+        
+        info!("文件数据发送完成，发送传输结束信号...");
+        
+        // 发送传输结束信号
+        Self::send_transfer_complete(&mut stream).await?;
+        
+        info!("等待接收方的传输完成确认...");
+        
+        // 等待接收方的传输完成确认
+        Self::wait_for_transfer_complete(&mut stream).await?;
+        
+        info!("文件传输完成: {}", file_name);
+        Ok(())
+    }
+    
+    // 并发传输多个文件
+    pub async fn send_files(
+        ipv6_addr: &str,
+        file_paths: &[String],
+    ) -> Result<Vec<(String, Result<(), SendError>)>, SendError> {
+        if file_paths.is_empty() {
+            return Ok(Vec::new());
+        }
+        
+        info!("开始并发发送 {} 个文件到 {}", file_paths.len(), ipv6_addr);
+        
+        // 创建信号量限制并发数量
+        let semaphore = Arc::new(Semaphore::new(CONCURRENT_TRANSFERS));
+        let mut tasks = Vec::new();
+        
+        // 为每个文件创建异步任务
+        for file_path in file_paths {
+            let ip = ipv6_addr.to_string();
+            let path = file_path.clone();
+            let semaphore = semaphore.clone();
+            
+            let task = tokio::spawn(async move {
+                // 在任务内部获取许可
+                let _permit = semaphore.acquire().await;
+                let result = Self::send_single_file(&ip, &path).await;
+                (path, result)
+            });
+            
+            tasks.push(task);
+        }
+        
+        // 等待所有任务完成
+        let mut results = Vec::new();
+        for task in tasks {
+            match task.await {
+                Ok(result) => results.push(result),
+                Err(e) => {
+                    error!("任务执行失败: {}", e);
+                    results.push(("unknown".to_string(), Err("任务执行失败".into())));
+                }
+            }
+        }
+        
+        // 统计成功和失败的数量
+        let success_count = results.iter().filter(|(_, r)| r.is_ok()).count();
+        let fail_count = results.len() - success_count;
+        
+        info!("并发发送完成: {} 成功, {} 失败", success_count, fail_count);
+        
+        Ok(results)
+    }
+    
+    #[allow(dead_code)]
     pub async fn send_file(
         ipv6_addr: &str,
         file_path: &str,
-    ) -> Result<(), Box<dyn error::Error>> {
+    ) -> Result<(), SendError> {
         // 如果 IP 地址为空，默认使用本地地址 (::1)
         let actual_ip = if ipv6_addr.is_empty() {
             "::1"
@@ -414,7 +469,7 @@ impl FileSender {
         Ok(())
     }
     
-    pub async fn select_files() -> Result<Vec<String>, Box<dyn error::Error>> {
+    pub async fn select_files() -> Result<Vec<String>, SendError> {
         // 使用 rfd 选择多个文件
         let file_handles = rfd::AsyncFileDialog::new()
             .set_title("选择要发送的文件（可多选）")
