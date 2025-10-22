@@ -170,7 +170,7 @@ pub fn HistoryWindow(on_close: EventHandler) -> Element {
                 ",
                 input {
                     style: "
-                        width: 100%;
+                        width: 90%;
                         padding: 12px 16px;
                         border: 1px solid #ddd;
                         border-radius: 8px;

@@ -113,21 +113,20 @@ impl FileReceiver {
             .local_private_key(&static_key)
             .build_responder()?;
         
-        // 接收握手消息
-        let mut handshake_buffer = vec![0u8; 65535];
-        
         // 接收第一条消息
         let len = stream.read_u16().await? as usize;
         let mut msg = vec![0u8; len];
         stream.read_exact(&mut msg).await?;
         
         // 读取并消费第一条消息
-        let _ = noise.read_message(&msg, &mut handshake_buffer)?;
+        let mut handshake_buffer1 = vec![0u8; 65535];
+        let _ = noise.read_message(&msg, &mut handshake_buffer1)?;
         
         // 发送响应消息
-        let len = noise.write_message(&[], &mut handshake_buffer)?;
+        let mut handshake_buffer2 = vec![0u8; 65535];
+        let len = noise.write_message(&[], &mut handshake_buffer2)?;
         stream.write_u16(len as u16).await?;
-        stream.write_all(&handshake_buffer[..len]).await?;
+        stream.write_all(&handshake_buffer2[..len]).await?;
         
         // 接收第三条消息
         let len = stream.read_u16().await? as usize;
@@ -135,7 +134,8 @@ impl FileReceiver {
         stream.read_exact(&mut msg).await?;
         
         // 读取第三条消息完成握手
-        let _ = noise.read_message(&msg, &mut handshake_buffer)?;
+        let mut handshake_buffer3 = vec![0u8; 65535];
+        let _ = noise.read_message(&msg, &mut handshake_buffer3)?;
         
         // 转换为传输模式
         let transport = noise.into_transport_mode()?;
@@ -148,6 +148,14 @@ impl FileReceiver {
     async fn read_encrypted(transport: &mut snow::TransportState, stream: &mut TcpStream, buffer: &mut [u8]) -> Result<usize, Box<dyn error::Error>> {
         // 先读取加密数据的长度
         let encrypted_len = stream.read_u16().await? as usize;
+        if encrypted_len == 0 {
+            // 长度为0表示传输结束
+            return Ok(0);
+        }
+        if encrypted_len > 65535 {
+            error!("错误的加密数据长度");
+            return Err("无效的加密数据长度".into());
+        }
         let mut encrypted_data = vec![0u8; encrypted_len];
         stream.read_exact(&mut encrypted_data).await?;
         
@@ -163,11 +171,23 @@ impl FileReceiver {
         
         // 加密数据
         let len = transport.write_message(data, &mut buffer)?;
+        if len == 0 || len > 65535 {
+            error!("错误的加密数据长度");
+            return Err("无效的加密数据长度".into());
+        }
         
         // 发送加密数据的长度和数据
         stream.write_u16(len as u16).await?;
         stream.write_all(&buffer[..len]).await?;
         
+        Ok(())
+    }
+    
+    // 发送传输结束信号
+    async fn send_transfer_complete(stream: &mut TcpStream) -> Result<(), Box<dyn error::Error>> {
+        // 发送长度为0的数据包表示传输结束
+        stream.write_u16(0).await?;
+        stream.flush().await?;
         Ok(())
     }
     
@@ -255,7 +275,6 @@ impl FileReceiver {
         Ok(())
     }
     
-    // 修改：添加 peer_addr 参数来记录发送方IP
     async fn handle_client(
         mut stream: TcpStream,
         current_status: ReceiveStatus,
@@ -266,7 +285,11 @@ impl FileReceiver {
         
         // 接收身份标识（64字符固定长度）
         let mut identity_bytes = vec![0u8; 64];
-        Self::read_encrypted(&mut transport, &mut stream, &mut identity_bytes).await?;
+        let identity_len = Self::read_encrypted(&mut transport, &mut stream, &mut identity_bytes).await?;
+        if identity_len == 0 {
+            info!("接收到传输结束信号，连接正常关闭");
+            return Ok(());
+        }
         let identity = String::from_utf8(identity_bytes)?;
         
         info!("接收到身份标识: {}", identity);
@@ -275,6 +298,8 @@ impl FileReceiver {
         match current_status {
             ReceiveStatus::Closed => {
                 info!("接收功能已关闭，拒绝接收文件");
+                // 发送拒绝信号
+                Self::send_transfer_complete(&mut stream).await?;
                 return Ok(());
             }
             ReceiveStatus::Open => {
@@ -285,6 +310,8 @@ impl FileReceiver {
                 // 检查身份是否在白名单中
                 if !Self::check_identity_in_whitelist(&identity).await {
                     warn!("身份 {} 不在白名单中，拒绝接收文件", identity);
+                    // 发送拒绝信号
+                    Self::send_transfer_complete(&mut stream).await?;
                     return Ok(());
                 }
                 info!("身份 {} 在白名单中，允许接收文件", identity);
@@ -293,19 +320,31 @@ impl FileReceiver {
         
         // 接收文件名长度
         let mut file_name_len_bytes = vec![0u8; 8];
-        Self::read_encrypted(&mut transport, &mut stream, &mut file_name_len_bytes).await?;
+        let file_name_len_size = Self::read_encrypted(&mut transport, &mut stream, &mut file_name_len_bytes).await?;
+        if file_name_len_size == 0 {
+            info!("接收到传输结束信号，连接正常关闭");
+            return Ok(());
+        }
         let file_name_len = u64::from_be_bytes(file_name_len_bytes.try_into().unwrap());
         
         // 接收文件名
         let mut file_name_bytes = vec![0u8; file_name_len as usize];
-        Self::read_encrypted(&mut transport, &mut stream, &mut file_name_bytes).await?;
+        let file_name_size = Self::read_encrypted(&mut transport, &mut stream, &mut file_name_bytes).await?;
+        if file_name_size == 0 {
+            info!("接收到传输结束信号，连接正常关闭");
+            return Ok(());
+        }
         let file_name = String::from_utf8(file_name_bytes)?;
         
         info!("接收文件: {}", file_name);
         
         // 接收文件大小
         let mut file_size_bytes = vec![0u8; 8];
-        Self::read_encrypted(&mut transport, &mut stream, &mut file_size_bytes).await?;
+        let file_size_size = Self::read_encrypted(&mut transport, &mut stream, &mut file_size_bytes).await?;
+        if file_size_size == 0 {
+            info!("接收到传输结束信号，连接正常关闭");
+            return Ok(());
+        }
         let file_size = u64::from_be_bytes(file_size_bytes.try_into().unwrap());
         
         info!("文件大小: {} 字节", file_size);
@@ -334,7 +373,14 @@ impl FileReceiver {
             let bytes_read = Self::read_encrypted(&mut transport, &mut stream, &mut buffer[..bytes_to_read]).await?;
             
             if bytes_read == 0 {
-                break;
+                // 传输结束信号
+                if received == file_size {
+                    info!("文件传输正常结束");
+                    break;
+                } else {
+                    error!("文件传输中断: 已接收 {}/{} 字节", received, file_size);
+                    return Err("文件传输中断".into());
+                }
             }
             
             // 异步写入文件
@@ -350,7 +396,9 @@ impl FileReceiver {
         
         info!("文件接收完成: {}", final_save_path.display());
         
-        // 新增：记录文件接收信息到数据库
+        // 发送传输完成确认
+        Self::send_transfer_complete(&mut stream).await?;
+        
         if let Err(e) = crate::core::db::AddressBook::add_file_receive_record(
             &file_name,
             file_size,

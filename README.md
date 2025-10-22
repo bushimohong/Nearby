@@ -50,6 +50,11 @@ mohong@mohongdeMacBook-Air Nearby % tree -I assets -I target
 ```bash
 cargo run
 ```
+获得详细的运行日志
+
+```bash
+RUST_LOG=info cargo run
+```
 
 #### 备注
 

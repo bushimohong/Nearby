@@ -3,12 +3,17 @@ use dioxus::prelude::*;
 use crate::core::filesender::FileSender;
 use log::{info, error};
 
+use super::manual_target_selection::ManualTargetSelect;
+use super::friends_target_selection::FriendsTargetSelection;
+
 #[component]
 pub fn Send() -> Element {
-    let mut target_ip = use_signal(|| String::from("::1"));
+    let target_ip = use_signal(|| String::from("::1"));
     let mut status_message = use_signal(|| String::from("准备就绪"));
     let mut selected_files = use_signal(|| Vec::<String>::new());
     let is_sending = use_signal(|| false);
+    let mut manual_selection_enabled = use_signal(|| false);
+    let selected_targets = use_signal(|| Vec::<String>::new());
     
     rsx! {
         div {
@@ -98,17 +103,28 @@ pub fn Send() -> Element {
                                     to_owned![selected_files, status_message];
                                     async move {
                                         status_message.set("选择文件中...".to_string());
-                                        match FileSender::select_file().await {
-                                            Ok(Some(file_path)) => {
-                                                let mut files = selected_files.write();
-                                                if !files.contains(&file_path) {
-                                                    files.push(file_path.clone());
-                                                    status_message.set(format!("📁 已添加文件: {}", file_path));
+                                        match FileSender::select_files().await {
+                                            Ok(file_paths) => {
+                                                if !file_paths.is_empty() {
+                                                    let mut files = selected_files.write();
+                                                    let mut added_count = 0;
+                    
+                                                    for file_path in file_paths {
+                                                        if !files.contains(&file_path) {
+                                                            files.push(file_path);
+                                                            added_count += 1;
+                                                        }
+                                                    }
+                    
+                                                    if added_count > 0 {
+                                                        status_message.set(format!("📁 已添加 {} 个文件", added_count));
+                                                    } else {
+                                                        status_message.set("所有文件都已存在于列表中".to_string());
+                                                    }
                                                 } else {
-                                                    status_message.set("文件已存在列表中".to_string());
+                                                    status_message.set("未选择任何文件".to_string());
                                                 }
                                             }
-                                            Ok(None) => status_message.set("未选择文件".to_string()),
                                             Err(e) => status_message.set(format!("选择文件失败: {}", e)),
                                         }
                                     }
@@ -140,6 +156,25 @@ pub fn Send() -> Element {
                             span {
                                 style: "color: #6b7280; font-size: 14px;",
                                 "已选择 {selected_files.read().len()} 个文件"
+                            }
+                            
+                            div {
+                                style: "display: flex; align-items: center; gap: 8px;",
+                                input {
+                                    r#type: "checkbox",
+                                    class: "manual-selection-switch",
+                                    style: "
+                                        width: 40px;
+                                        height: 20px;
+                                        appearance: none;
+                                        border-radius: 10px;
+                                        cursor: pointer;
+                                        position: relative;
+                                        transition: background-color 0.2s;
+                                    ",
+                                    checked: *manual_selection_enabled.read(),
+                                    onchange: move |e| manual_selection_enabled.set(e.checked()),
+                                }
                             }
                         }
                     }
@@ -208,40 +243,20 @@ pub fn Send() -> Element {
                         }
                     }
 
-                    // IPv6 输入区域
-                    div {
-                        style: "margin-bottom: 24px;",
-                        label {
-                            style: "
-                                display: block;
-                                font-weight: 600;
-                                margin-bottom: 8px;
-                                color: #374151;
-                                font-size: 16px;
-                            ",
-                            "目标 IPv6 地址"
+                    if *manual_selection_enabled.read() {
+                        ManualTargetSelect {
+                            target_ip: target_ip,
+                            disabled: *is_sending.read(),
                         }
-                        input {
-                            style: "
-                                width: 100%;
-                                padding: 12px;
-                                border: 1px solid #d1d5db;
-                                border-radius: 8px;
-                                box-sizing: border-box;
-                                outline: none;
-                                font-size: 14px;
-                                transition: border-color 0.2s;
-                            ",
-                            r#type: "text",
-                            placeholder: "例如: ::1 或 其他 IPv6 地址",
-                            value: "{target_ip}",
-                            oninput: move |e| target_ip.set(e.value()),
-                        }
-                        p {
-                            style: "margin: 8px 0 0 0; color: #6b7280; font-size: 12px;",
-                            "留空将默认使用 ::1 (本地回环地址)"
+                    } else {
+                        FriendsTargetSelection {
+                            selected_targets: selected_targets,
+                            disabled: *is_sending.read(),
                         }
                     }
+                    
+                    
+                    
 
                     // 发送按钮
                     button {
@@ -261,46 +276,68 @@ pub fn Send() -> Element {
                         ",
                         disabled: selected_files.read().is_empty() || *is_sending.read(),
                         onclick: move |_| {
-                            to_owned![target_ip, selected_files, status_message, is_sending];
+                            to_owned![target_ip, selected_files, status_message, is_sending, manual_selection_enabled, selected_targets];
                             let ip = target_ip.read().clone();
                             let files = selected_files.read().clone();
+                            let is_manual = *manual_selection_enabled.read();
+                            let targets = selected_targets.read().clone();
 
                             async move {
                                 is_sending.set(true);
-                                
+        
                                 if files.is_empty() {
                                     status_message.set("请先选择文件".to_string());
                                     is_sending.set(false);
                                     return;
                                 }
 
-                                let target = if ip.is_empty() { "::1" } else { &ip };
-                                status_message.set(format!("📦 准备发送 {} 个文件到 {}...", files.len(), target));
+                                // 根据模式选择目标
+                                let target_list = if is_manual {
+                                    // 手动模式：使用单个目标IP
+                                    if ip.is_empty() {
+                                        vec!["::1".to_string()]
+                                    } else {
+                                        vec![ip.clone()]
+                                    }
+                                } else {
+                                    // 朋友模式：使用选中的多个目标
+                                    if targets.is_empty() {
+                                        status_message.set("请先选择目标朋友".to_string());
+                                        is_sending.set(false);
+                                        return;
+                                    }
+                                    targets.clone()
+                                };
+
+                                status_message.set(format!("📦 准备发送 {} 个文件到 {} 个目标...", files.len(), target_list.len()));
 
                                 let mut success_count = 0;
                                 let mut fail_count = 0;
 
-                                for (index, file_path) in files.iter().enumerate() {
-                                    status_message.set(format!("正在发送文件 {}/{}: {}", index + 1, files.len(), file_path));
-                                    
-                                    match FileSender::send_file(&ip, file_path).await {
-                                        Ok(_) => {
-                                            info!("发送成功: {}", file_path);
-                                            success_count += 1;
-                                        },
-                                        Err(e) => {
-                                            error!("发送失败: {} - {}", file_path, e);
-                                            fail_count += 1;
-                                        },
+                                // 对每个目标和每个文件进行发送
+                                for target in &target_list {
+                                    for (index, file_path) in files.iter().enumerate() {
+                                        status_message.set(format!("正在发送文件 {}/{} 到 {}...", index + 1, files.len(), target));
+                
+                                        match FileSender::send_file(target, file_path).await {
+                                            Ok(_) => {
+                                                info!("发送成功: {} 到 {}", file_path, target);
+                                                success_count += 1;
+                                            },
+                                            Err(e) => {
+                                                error!("发送失败: {} 到 {} - {}", file_path, target, e);
+                                                fail_count += 1;
+                                            },
+                                        }
                                     }
                                 }
 
                                 if fail_count == 0 {
-                                    status_message.set(format!("✅ 所有文件发送完成 ({} 个文件)", success_count));
+                                    status_message.set(format!("✅ 所有文件发送完成 ({} 个文件, {} 个目标)", success_count, target_list.len()));
                                 } else {
                                     status_message.set(format!("⚠️ 发送完成: {} 成功, {} 失败", success_count, fail_count));
                                 }
-                                
+        
                                 is_sending.set(false);
                             }
                         },
