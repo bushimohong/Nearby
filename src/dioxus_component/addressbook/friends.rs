@@ -1,13 +1,14 @@
 // src/dioxus_component/addressbook/friends.rs
 use dioxus::prelude::*;
-use crate::core::db::AddressBook;
+use crate::data::db::FriendEntry;
+use crate::data::db::AddressBook;
 
 #[component]
-pub fn FriendsList(refresh_trigger: u32) -> Element {
+pub fn FriendsList(refresh_trigger: u32, on_navigate_to_send: EventHandler<(String, String)>) -> Element {
 	let friends = use_signal(|| Vec::new());
 	let mut search_query = use_signal(|| String::new());
 	let mut error_message = use_signal(|| None::<String>);
-	let mut selected_friend = use_signal(|| None::<crate::core::db::FriendEntry>);
+	let mut selected_friend = use_signal(|| None::<FriendEntry>);
 	let mut show_edit_modal = use_signal(|| false);
 	
 	// 统一的错误处理函数
@@ -61,10 +62,27 @@ pub fn FriendsList(refresh_trigger: u32) -> Element {
 		}
 	};
 	
-	// 处理编辑好友
-	let mut handle_edit_friend = move |friend: crate::core::db::FriendEntry| {
-		selected_friend.set(Some(friend));
-		show_edit_modal.set(true);
+	// 处理编辑好友（现在只由更多图标触发）
+	let mut handle_edit_friend = move |id: i64| {
+		if let Some(friend) = friends.read().iter().find(|f| f.id == id) {
+			selected_friend.set(Some(friend.clone()));
+			show_edit_modal.set(true);
+		}
+	};
+	
+	// 处理跳转到发送页面
+	let handle_navigate_to_send = {
+		let on_navigate_to_send = on_navigate_to_send.clone();
+		move |id: i64| {
+			// 使用临时变量来避免借用冲突
+			let friend_opt = {
+				let friends_guard = friends.read();
+				friends_guard.iter().find(|f| f.id == id).cloned()
+			};
+			if let Some(friend) = friend_opt {
+				on_navigate_to_send.call((friend.address, friend.alias));
+			}
+		}
 	};
 	
 	// 处理保存编辑
@@ -101,7 +119,6 @@ pub fn FriendsList(refresh_trigger: u32) -> Element {
 		});
 	};
 	
-	// 克隆好友列表以避免生命周期问题
 	let friends_list = friends.read().clone();
 	
 	rsx! {
@@ -146,7 +163,7 @@ pub fn FriendsList(refresh_trigger: u32) -> Element {
                     }
                     
                     button {
-						class: "search-button",
+                        class: "search-button",
                         style: "
                             padding: 8px 16px;
                             background: #3b82f6;
@@ -197,7 +214,8 @@ pub fn FriendsList(refresh_trigger: u32) -> Element {
                     for friend in friends_list {
                         FriendItem {
                             friend: friend.clone(),
-                            on_click: move || handle_edit_friend(friend.clone())
+							on_main_click: move || handle_navigate_to_send(friend.id),
+                            on_more_click: move || handle_edit_friend(friend.id),
                         }
                     }
                 }
@@ -225,10 +243,14 @@ pub fn FriendsList(refresh_trigger: u32) -> Element {
 }
 
 #[component]
-fn FriendItem(friend: crate::core::db::FriendEntry, on_click: EventHandler) -> Element {
+fn FriendItem(
+	friend: FriendEntry,
+	on_main_click: EventHandler,
+	on_more_click: EventHandler
+) -> Element {
 	rsx! {
         div {
-			class: "friend-item",
+            class: "friend-item-o",
             style: "
                 display: flex;
                 justify-content: space-between;
@@ -243,11 +265,15 @@ fn FriendItem(friend: crate::core::db::FriendEntry, on_click: EventHandler) -> E
             onmouseenter: move |_| {
                 // 悬停效果
             },
-            onclick: move |_| on_click.call(()),
             
-            // 好友信息
+            // 好友信息主体区域 - 点击跳转到发送页面
             div {
-                style: "flex: 1;",
+                class: "friend-main-info",
+                style: "
+                    flex: 1;
+                    cursor: pointer;
+                ",
+                onclick: move |_| on_main_click.call(()),
                 
                 div {
                     style: "
@@ -268,10 +294,23 @@ fn FriendItem(friend: crate::core::db::FriendEntry, on_click: EventHandler) -> E
                 }
             }
             
-            // 点击提示
+            // 更多图标区域 - 点击打开编辑窗口
             div {
+                class: "friend-more-button",
+                style: "
+                    cursor: pointer;
+                    padding: 8px;
+                    border-radius: 4px;
+                    transition: background-color 0.2s;
+                    margin-left: 12px;
+                ",
+                onclick: move |e| {
+                    e.stop_propagation();
+                    on_more_click.call(());
+                },
+                
                 img {
-                    style: "width: 24px; height: 24px;",
+                    style: "width: 20px; height: 20px; opacity: 0.6; transition: opacity 0.2s;",
                     src: asset!("assets/more-100.png"),
                 }
             }
@@ -281,7 +320,7 @@ fn FriendItem(friend: crate::core::db::FriendEntry, on_click: EventHandler) -> E
 
 #[component]
 fn FriendEditModal(
-	friend: crate::core::db::FriendEntry,
+	friend: FriendEntry,
 	on_save: EventHandler<(i64, String, String)>,
 	on_delete: EventHandler<i64>,
 	on_close: EventHandler,

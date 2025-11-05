@@ -1,7 +1,8 @@
 // src/dioxus_component/send/friends_target_selection.rs
 use std::rc::Rc;
 use dioxus::prelude::*;
-use crate::core::db::AddressBook;
+use crate::data::db::FriendEntry;
+use crate::data::db::AddressBook;
 
 #[component]
 pub fn FriendsTargetSelection(
@@ -290,7 +291,7 @@ pub fn FriendsTargetSelection(
 
 #[derive(Props, Clone)]
 struct FriendsSelectionModalProps {
-	friends: Vec<crate::core::db::FriendEntry>,
+	friends: Vec<FriendEntry>,
 	selected_targets: Signal<Vec<String>>,
 	search_query: Signal<String>,
 	on_search: EventHandler,
@@ -511,7 +512,7 @@ fn FriendsSelectionModal(props: FriendsSelectionModalProps) -> Element {
 
 #[derive(Props, Clone, PartialEq)]
 struct FriendSelectionItemProps {
-	friend: crate::core::db::FriendEntry,
+	friend: FriendEntry,
 	is_selected: bool,
 	on_toggle: EventHandler,
 	disabled: bool,

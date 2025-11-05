@@ -5,7 +5,7 @@ use std::sync::Arc;
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use crate::core::db::AddressBook;
+use crate::data::db::AddressBook;
 use log::{info, error};
 use tokio::sync::Semaphore;
 
@@ -178,13 +178,7 @@ impl FileSender {
         // 异步打开要发送的文件
         let mut file = File::open(file_path).await?;
         
-        let file_name = match std::path::Path::new(file_path).file_name() {
-            Some(name) => name.to_string_lossy().to_string(),
-            None => {
-                error!("无法从路径获取文件名: {}", file_path);
-                return Err("无效的文件路径".into());
-            }
-        };
+        let file_name = Self::extract_filename(file_path)?;
         
         // 获取文件大小
         let file_size = file.metadata().await?.len();
@@ -368,13 +362,7 @@ impl FileSender {
             }
         };
         
-        let file_name = match std::path::Path::new(file_path).file_name() {
-            Some(name) => name.to_string_lossy().to_string(),
-            None => {
-                error!("无法从路径获取文件名: {}", file_path);
-                return Err("无效的文件路径".into());
-            }
-        };
+        let file_name = Self::extract_filename(file_path)?;
         
         // 获取文件大小
         let file_size = match file.metadata().await {
@@ -487,6 +475,16 @@ impl FileSender {
         } else {
             info!("用户取消了文件选择");
             Ok(Vec::new())
+        }
+    }
+    
+    fn extract_filename(file_path: &str) -> Result<String, SendError> {
+        match std::path::Path::new(file_path).file_name() {
+            Some(name) => Ok(name.to_string_lossy().to_string()),
+            None => {
+                error!("无法从路径获取文件名: {}", file_path);
+                Err("无效的文件路径".into())
+            }
         }
     }
 }

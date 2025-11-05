@@ -7,13 +7,33 @@ use super::manual_target_selection::ManualTargetSelect;
 use super::friends_target_selection::FriendsTargetSelection;
 
 #[component]
-pub fn Send() -> Element {
+pub fn Send(pre_selected_targets: Vec<(String, String)>) -> Element {
     let target_ip = use_signal(|| String::from("::1"));
     let mut status_message = use_signal(|| String::from("准备就绪"));
     let mut selected_files = use_signal(|| Vec::<String>::new());
     let is_sending = use_signal(|| false);
     let mut manual_selection_enabled = use_signal(|| false);
-    let selected_targets = use_signal(|| Vec::<String>::new());
+    let mut selected_targets = use_signal(|| {
+        // 如果有预设目标，使用预设目标
+        if !pre_selected_targets.is_empty() {
+            pre_selected_targets.iter().map(|(address, _)| address.clone()).collect()
+        } else {
+            Vec::new()
+        }
+    });
+    
+    // 使用效果来处理预设目标
+    let pre_selected_targets_clone = pre_selected_targets.clone();
+    use_effect(use_reactive((&pre_selected_targets_clone,), move |_| {
+        if !pre_selected_targets.is_empty() {
+            // 如果有预设目标，自动切换到好友选择模式
+            manual_selection_enabled.set(false);
+            let addresses: Vec<String> = pre_selected_targets.iter()
+                .map(|(address, _)| address.clone())
+                .collect();
+            *selected_targets.write() = addresses;
+        }
+    }));
     
     rsx! {
         div {
@@ -157,25 +177,6 @@ pub fn Send() -> Element {
                                 style: "color: #6b7280; font-size: 14px;",
                                 "已选择 {selected_files.read().len()} 个文件"
                             }
-                            
-                            div {
-                                style: "display: flex; align-items: center; gap: 8px;",
-                                input {
-                                    r#type: "checkbox",
-                                    class: "manual-selection-switch",
-                                    style: "
-                                        width: 40px;
-                                        height: 20px;
-                                        appearance: none;
-                                        border-radius: 10px;
-                                        cursor: pointer;
-                                        position: relative;
-                                        transition: background-color 0.2s;
-                                    ",
-                                    checked: *manual_selection_enabled.read(),
-                                    onchange: move |e| manual_selection_enabled.set(e.checked()),
-                                }
-                            }
                         }
                     }
 
@@ -243,6 +244,39 @@ pub fn Send() -> Element {
                         }
                     }
 
+                    // 目标选择模式切换
+                    div {
+                        style: "
+                            display: flex;
+                            align-items: center;
+                            gap: 8px;
+                            margin-bottom: 16px;
+                        ",
+                        span {
+                            style: "color: #374151; font-size: 14px;",
+                            "手动输入目标"
+                        }
+                        div {
+                            style: "display: flex; align-items: center;",
+                            input {
+                                r#type: "checkbox",
+                                class: "manual-selection-switch",
+                                style: "
+                                    width: 40px;
+                                    height: 20px;
+                                    appearance: none;
+                                    background-color: #d1d5db;
+                                    border-radius: 10px;
+                                    cursor: pointer;
+                                    position: relative;
+                                    transition: background-color 0.2s;
+                                ",
+                                checked: *manual_selection_enabled.read(),
+                                onchange: move |e| manual_selection_enabled.set(e.checked()),
+                            }
+                        }
+                    }
+
                     if *manual_selection_enabled.read() {
                         ManualTargetSelect {
                             target_ip: target_ip,
@@ -254,9 +288,6 @@ pub fn Send() -> Element {
                             disabled: *is_sending.read(),
                         }
                     }
-                    
-                    
-                    
 
                     // 发送按钮
                     button {

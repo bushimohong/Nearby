@@ -4,6 +4,7 @@ use dioxus_component::App;
 
 mod dioxus_component;
 mod core;
+mod data;
 
 fn main() {
 	env_logger::init();

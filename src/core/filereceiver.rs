@@ -11,6 +11,7 @@ use tokio::sync::{Notify, Semaphore};
 use std::sync::Mutex;
 use pnet::datalink;
 use log::{info, error, warn};
+use crate::data::db::AddressBook;
 
 // 定义可发送的错误类型
 type ReceiveError = Box<dyn error::Error + Send + Sync>;
@@ -96,7 +97,7 @@ impl FileReceiver {
     // 检查身份是否在白名单中
     async fn check_identity_in_whitelist(identity: &str) -> bool {
         // 使用 db.rs 的 search_identities 验证身份码是否存在
-        match crate::core::db::AddressBook::search_identities(identity).ok() {
+        match AddressBook::search_identities(identity).ok() {
             Some(identities) => {
                 // 如果找到匹配的身份码，返回 true
                 !identities.is_empty()
@@ -424,7 +425,7 @@ impl FileReceiver {
         // 发送传输完成确认
         Self::send_transfer_complete(&mut stream).await?;
         
-        if let Err(e) = crate::core::db::AddressBook::add_file_receive_record(
+        if let Err(e) = AddressBook::add_file_receive_record(
             &file_name,
             file_size,
             &peer_addr.ip().to_string(),

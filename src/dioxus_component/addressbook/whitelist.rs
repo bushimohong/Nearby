@@ -1,13 +1,14 @@
 // src/dioxus_component/addressbook/whitelist.rs
 use dioxus::prelude::*;
-use crate::core::db::AddressBook;
+use crate::data::db::IdentityEntry;
+use crate::data::db::AddressBook;
 
 #[component]
 pub fn Whitelist(refresh_trigger: u32) -> Element {
 	let identities = use_signal(|| Vec::new());
 	let mut search_query = use_signal(|| String::new());
 	let mut error_message = use_signal(|| None::<String>);
-	let mut selected_identity = use_signal(|| None::<crate::core::db::IdentityEntry>);
+	let mut selected_identity = use_signal(|| None::<IdentityEntry>);
 	let mut show_edit_modal = use_signal(|| false);
 	
 	// 统一的错误处理函数
@@ -62,7 +63,7 @@ pub fn Whitelist(refresh_trigger: u32) -> Element {
 	};
 	
 	// 处理编辑身份标识
-	let mut handle_edit_identity = move |identity: crate::core::db::IdentityEntry| {
+	let mut handle_edit_identity = move |identity: IdentityEntry| {
 		selected_identity.set(Some(identity));
 		show_edit_modal.set(true);
 	};
@@ -225,7 +226,7 @@ pub fn Whitelist(refresh_trigger: u32) -> Element {
 }
 
 #[component]
-fn IdentityItem(identity: crate::core::db::IdentityEntry, on_click: EventHandler) -> Element {
+fn IdentityItem(identity: IdentityEntry, on_click: EventHandler) -> Element {
 	rsx! {
         div {
 			class: "identity-item",
@@ -282,7 +283,7 @@ fn IdentityItem(identity: crate::core::db::IdentityEntry, on_click: EventHandler
 
 #[component]
 fn IdentityEditModal(
-	identity: crate::core::db::IdentityEntry,
+	identity: IdentityEntry,
 	on_save: EventHandler<(i64, String, String)>,
 	on_delete: EventHandler<i64>,
 	on_close: EventHandler,

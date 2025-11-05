@@ -1,19 +1,36 @@
+// src/dioxus_component/app.rs
 use dioxus::prelude::*;
 use crate::dioxus_component::{Send, Receive, AddressBookPage, Settings};
 
 #[derive(Clone, PartialEq)]
 pub enum Page {
     Receive,
-	Send,
+    Send,
     AddressBook,
-	Settings,
+    Settings,
+}
+
+#[derive(Clone)]
+pub struct NavigationData {
+    pub selected_friends: Vec<(String, String)>,
 }
 
 #[component]
 pub fn App() -> Element {
-	let current_page = use_signal(|| Page::Receive);
-	
-	rsx! {
+    let current_page = use_signal(|| Page::Receive);
+    let navigation_data = use_signal(|| NavigationData { selected_friends: Vec::new() });
+    
+    let on_navigate_to_send = {
+        let mut current_page = current_page.clone();
+        let mut navigation_data = navigation_data.clone();
+        
+        EventHandler::new(move |(address, alias): (String, String)| {
+            navigation_data.write().selected_friends = vec![(address, alias)];
+            current_page.set(Page::Send);
+        })
+    };
+    
+    rsx! {
         style { {include_str!("../../assets/main.css")} }
         
         div {
@@ -37,9 +54,17 @@ pub fn App() -> Element {
                     flex-direction: column;
                 ",
                 match current_page() {
-                    Page::Send => rsx! { Send {} },
+                    Page::Send => rsx! {
+                        Send {
+                            pre_selected_targets: navigation_data.read().selected_friends.clone()
+                        }
+                    },
                     Page::Receive => rsx! { Receive {} },
-                    Page::AddressBook => rsx! { AddressBookPage {} },
+                    Page::AddressBook => rsx! {
+                        AddressBookPage {
+                            on_navigate_to_send: on_navigate_to_send
+                        }
+                    },
                     Page::Settings => rsx! { Settings {} },
                 }
             }
@@ -52,10 +77,10 @@ pub fn App() -> Element {
 
 #[component]
 pub fn BottomNav(current_page: Signal<Page>) -> Element {
-	rsx! {
+    rsx! {
         div {
             style: "
-                height: 10%;
+                height: 12%;
                 min-height: 60px;
                 display: flex;
                 border-top: 1px solid #e0e0e0;
@@ -96,14 +121,14 @@ pub fn BottomNav(current_page: Signal<Page>) -> Element {
 
 #[component]
 pub fn NavItem(
-	active: bool,
-	icon_src: Asset,
-	label: &'static str,
-	on_click: EventHandler,
+    active: bool,
+    icon_src: Asset,
+    label: &'static str,
+    on_click: EventHandler,
 ) -> Element {
-	let text_color = if active { "#1976d2" } else { "#666" };
-	
-	rsx! {
+    let text_color = if active { "#1976d2" } else { "#666" };
+    
+    rsx! {
         button {
             style: "
                 flex: 1;

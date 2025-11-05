@@ -1,6 +1,6 @@
 // src/dioxus_component/settings/setting.rs
 use dioxus::prelude::*;
-use crate::core::db::AddressBook;
+use crate::data::db::AddressBook;
 
 #[component]
 pub fn Settings() -> Element {

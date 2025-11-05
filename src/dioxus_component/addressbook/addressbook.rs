@@ -5,10 +5,10 @@ use super::friends::FriendsList;
 use super::whitelist::Whitelist;
 
 #[component]
-pub fn AddressBookPage() -> Element {
+pub fn AddressBookPage(on_navigate_to_send: EventHandler<(String, String)>) -> Element {
     let mut active_tab = use_signal(|| "friends");
     let mut show_add_modal = use_signal(|| false);
-    let mut refresh_trigger = use_signal(|| 0); // 添加刷新触发器
+    let mut refresh_trigger = use_signal(|| 0);
     
     // 刷新列表的函数
     let mut refresh_list = move || {
@@ -133,7 +133,8 @@ pub fn AddressBookPage() -> Element {
                     match *active_tab.read() {
                         "friends" => rsx! {
                             FriendsList {
-                                refresh_trigger: *refresh_trigger.read()
+                                refresh_trigger: *refresh_trigger.read(),
+                                on_navigate_to_send: on_navigate_to_send
                             }
                         },
                         "whitelist" => rsx! {

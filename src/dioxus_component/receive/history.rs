@@ -1,6 +1,6 @@
 // src/dioxus_component/receive/history
 use dioxus::prelude::*;
-use crate::core::db::{AddressBook, FileReceiveRecord};
+use crate::data::db::{AddressBook, FileReceiveRecord};
 use chrono::{DateTime, Local, NaiveDateTime};
 use humansize::{format_size, DECIMAL};
 

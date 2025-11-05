@@ -200,7 +200,7 @@ button[style*="color: #999"]:hover {
 }
 
 /* 列表项悬停效果 */
-.friend-item:hover,
+.friend-item-o:hover,
 .identity-item:hover {
     background-color: #f8fafc !important;
     border-color: #3b82f6 !important;
@@ -284,3 +284,24 @@ button[style*="color: #999"]:hover {
     cursor: pointer;
 }
 
+/* 在相应的 CSS 文件中添加 */
+.friend-item {
+    transition: all 0.2s ease;
+}
+
+.friend-item:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border-color: #3b82f6;
+}
+
+.friend-main-info:hover {
+    background-color: #f8fafc;
+}
+
+.friend-more-button:hover {
+    background-color: #f1f5f9;
+}
+
+.friend-more-button:hover img {
+    opacity: 1 !important;
+}

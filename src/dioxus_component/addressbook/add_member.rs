@@ -1,6 +1,6 @@
 // src/dioxus_component/addressbook/add_modal.rs
 use dioxus::prelude::*;
-use crate::core::db::AddressBook;
+use crate::data::db::AddressBook;
 
 #[component]
 pub fn AddModal(on_close: EventHandler, active_tab: &'static str, on_success: EventHandler) -> Element {
